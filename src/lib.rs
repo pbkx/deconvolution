@@ -6,6 +6,9 @@ pub mod prelude;
 pub mod psf;
 pub mod traits;
 
+pub use crate::core::diagnostics::SolveReport;
+pub use crate::core::regularizer::{RegOperator2D, RegOperator3D};
+pub use crate::core::stopping::StopReason;
 pub use crate::error::{Error, Result};
 pub use crate::otf::{Transfer2D, Transfer3D};
 pub use crate::psf::{Kernel2D, Kernel3D};
