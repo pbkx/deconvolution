@@ -1,5 +1,10 @@
 use deconvolution::{
+    otf::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
+    psf::{
+        center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,
+        pad_to_3d, support_mask, support_mask_3d, validate, validate_3d,
+    },
     psf::{Blur2D, Blur3D},
     Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
 };
@@ -123,4 +128,155 @@ fn blur_wrappers_are_lightweight_references() {
         Blur3D::Otf(otf) => assert!(std::ptr::eq(otf, &transfer3)),
         Blur3D::Psf(_) => panic!("expected otf variant"),
     }
+}
+
+#[test]
+fn psf2otf_delta_is_all_ones() {
+    let delta2 = Kernel2D::new(array![
+        [0.0_f32, 0.0_f32, 0.0_f32],
+        [0.0_f32, 1.0_f32, 0.0_f32],
+        [0.0_f32, 0.0_f32, 0.0_f32]
+    ])
+    .unwrap();
+    let otf2 = psf2otf(&delta2, delta2.dims()).unwrap();
+    for value in otf2.as_array() {
+        assert!((*value - Complex32::new(1.0, 0.0)).norm() < 1e-5);
+    }
+
+    let delta3 = Kernel3D::new(array![
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 1.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ]
+    ])
+    .unwrap();
+    let otf3 = psf2otf_3d(&delta3, delta3.dims()).unwrap();
+    for value in otf3.as_array() {
+        assert!((*value - Complex32::new(1.0, 0.0)).norm() < 1e-5);
+    }
+}
+
+#[test]
+fn otf_psf_roundtrip_within_tolerance() {
+    let psf2 = Kernel2D::new(array![
+        [0.0_f32, 0.1_f32, 0.0_f32],
+        [0.1_f32, 0.6_f32, 0.1_f32],
+        [0.0_f32, 0.1_f32, 0.0_f32]
+    ])
+    .unwrap();
+    let psf2_norm = normalize(&psf2).unwrap();
+    let otf2 = psf2otf(&psf2_norm, (7, 6)).unwrap();
+    let restored2 = otf2psf(&otf2, psf2_norm.dims()).unwrap();
+    for ((y, x), value) in psf2_norm.as_array().indexed_iter() {
+        assert!((restored2.as_array()[[y, x]] - value).abs() < 1e-4);
+    }
+
+    let psf3 = Kernel3D::new(array![
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.1_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.1_f32, 0.0_f32],
+            [0.1_f32, 0.4_f32, 0.1_f32],
+            [0.0_f32, 0.1_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.1_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ]
+    ])
+    .unwrap();
+    let psf3_norm = normalize_3d(&psf3).unwrap();
+    let otf3 = psf2otf_3d(&psf3_norm, (5, 6, 7)).unwrap();
+    let restored3 = otf2psf_3d(&otf3, psf3_norm.dims()).unwrap();
+    for ((d, y, x), value) in psf3_norm.as_array().indexed_iter() {
+        assert!((restored3.as_array()[[d, y, x]] - value).abs() < 1e-4);
+    }
+}
+
+#[test]
+fn center_pad_crop_flip_and_validate_follow_conventions() {
+    let psf = Kernel2D::new(array![
+        [0.0_f32, 0.0_f32, 0.0_f32],
+        [1.0_f32, 0.0_f32, 0.0_f32],
+        [0.0_f32, 0.0_f32, 0.0_f32]
+    ])
+    .unwrap();
+    let centered = center(&psf).unwrap();
+    assert_eq!(centered.as_array()[[1, 1]], 1.0);
+
+    let padded = pad_to(&centered, (5, 7)).unwrap();
+    assert_eq!(padded.dims(), (5, 7));
+    let cropped = crop_to(&padded, centered.dims()).unwrap();
+    assert_eq!(cropped, centered);
+
+    let flipped = flip(&centered).unwrap();
+    assert_eq!(flipped.as_array()[[1, 1]], 1.0);
+    validate(&centered).unwrap();
+
+    let psf3 = Kernel3D::new(array![
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [1.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ],
+        [
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32],
+            [0.0_f32, 0.0_f32, 0.0_f32]
+        ]
+    ])
+    .unwrap();
+    let centered3 = center_3d(&psf3).unwrap();
+    assert_eq!(centered3.as_array()[[1, 1, 1]], 1.0);
+
+    let padded3 = pad_to_3d(&centered3, (5, 5, 5)).unwrap();
+    let cropped3 = crop_to_3d(&padded3, centered3.dims()).unwrap();
+    assert_eq!(cropped3, centered3);
+
+    let flipped3 = flip_3d(&centered3).unwrap();
+    assert_eq!(flipped3.as_array()[[1, 1, 1]], 1.0);
+    validate_3d(&centered3).unwrap();
+}
+
+#[test]
+fn support_mask_thresholding_is_stable() {
+    let psf = Kernel2D::new(array![
+        [1.0_f32, 0.5_f32, 0.1_f32],
+        [0.0_f32, 0.0_f32, 0.0_f32],
+        [0.0_f32, 0.0_f32, 0.0_f32]
+    ])
+    .unwrap();
+    let mask = support_mask(&psf, 0.5).unwrap();
+    assert!(mask[[0, 0]]);
+    assert!(mask[[0, 1]]);
+    assert!(!mask[[0, 2]]);
+
+    let psf3 = Kernel3D::new(array![
+        [[1.0_f32, 0.25_f32], [0.0_f32, 0.0_f32]],
+        [[0.0_f32, 0.0_f32], [0.0_f32, 0.0_f32]]
+    ])
+    .unwrap();
+    let mask3 = support_mask_3d(&psf3, 0.3).unwrap();
+    assert!(mask3[[0, 0, 0]]);
+    assert!(!mask3[[0, 0, 1]]);
 }
