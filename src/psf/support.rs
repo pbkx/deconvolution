@@ -1,4 +1,4 @@
-use ndarray::{s, Array2, Array3};
+use ndarray::{Array2, Array3};
 
 use crate::{Error, Kernel2D, Kernel3D, Result};
 
@@ -93,13 +93,12 @@ pub fn crop_to(kernel: &Kernel2D, dims: (usize, usize)) -> Result<Kernel2D> {
 
     let offset_y = (source_h - target_h) / 2;
     let offset_x = (source_w - target_w) / 2;
-    let cropped = kernel
-        .as_array()
-        .slice(s![
-            offset_y..offset_y + target_h,
-            offset_x..offset_x + target_w
-        ])
-        .to_owned();
+    let mut cropped = Array2::zeros((target_h, target_w));
+    for y in 0..target_h {
+        for x in 0..target_w {
+            cropped[[y, x]] = kernel.as_array()[[offset_y + y, offset_x + x]];
+        }
+    }
 
     Kernel2D::new(cropped)
 }
@@ -119,14 +118,14 @@ pub fn crop_to_3d(kernel: &Kernel3D, dims: (usize, usize, usize)) -> Result<Kern
     let offset_d = (source_d - target_d) / 2;
     let offset_y = (source_h - target_h) / 2;
     let offset_x = (source_w - target_w) / 2;
-    let cropped = kernel
-        .as_array()
-        .slice(s![
-            offset_d..offset_d + target_d,
-            offset_y..offset_y + target_h,
-            offset_x..offset_x + target_w
-        ])
-        .to_owned();
+    let mut cropped = Array3::zeros((target_d, target_h, target_w));
+    for d in 0..target_d {
+        for y in 0..target_h {
+            for x in 0..target_w {
+                cropped[[d, y, x]] = kernel.as_array()[[offset_d + d, offset_y + y, offset_x + x]];
+            }
+        }
+    }
 
     Kernel3D::new(cropped)
 }

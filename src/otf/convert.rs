@@ -1,4 +1,4 @@
-use ndarray::{s, Array2, Array3};
+use ndarray::{Array2, Array3};
 
 use crate::core::fft::{
     fft2_forward_real, fft2_inverse_complex, fft3_forward_real, fft3_inverse_complex,
@@ -79,7 +79,12 @@ pub fn otf2psf(otf: &Transfer2D, psf_dims: (usize, usize)) -> Result<Kernel2D> {
     let mut cache = PlanCache::new();
     let spatial = fft2_inverse_complex(otf.as_array(), &mut cache)?;
     let shifted = circular_shift_2d(&spatial, to_isize(psf_h / 2)?, to_isize(psf_w / 2)?)?;
-    let cropped = shifted.slice(s![0..psf_h, 0..psf_w]).to_owned();
+    let mut cropped = Array2::zeros((psf_h, psf_w));
+    for y in 0..psf_h {
+        for x in 0..psf_w {
+            cropped[[y, x]] = shifted[[y, x]];
+        }
+    }
     Kernel2D::new(cropped)
 }
 
@@ -102,7 +107,14 @@ pub fn otf2psf_3d(otf: &Transfer3D, psf_dims: (usize, usize, usize)) -> Result<K
         to_isize(psf_h / 2)?,
         to_isize(psf_w / 2)?,
     )?;
-    let cropped = shifted.slice(s![0..psf_d, 0..psf_h, 0..psf_w]).to_owned();
+    let mut cropped = Array3::zeros((psf_d, psf_h, psf_w));
+    for d in 0..psf_d {
+        for y in 0..psf_h {
+            for x in 0..psf_w {
+                cropped[[d, y, x]] = shifted[[d, y, x]];
+            }
+        }
+    }
     Kernel3D::new(cropped)
 }
 

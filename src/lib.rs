@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+
+mod algorithms;
 mod core;
 
 pub mod error;
@@ -15,3 +18,7 @@ pub use crate::error::{Error, Result};
 pub use crate::otf::{Transfer2D, Transfer3D};
 pub use crate::psf::{Kernel2D, Kernel3D};
 pub use crate::traits::{Boundary, ChannelMode, Padding, RangePolicy};
+pub use algorithms::{
+    inverse_filter, inverse_filter_with, naive_inverse_filter, naive_inverse_filter_with,
+    truncated_inverse_filter, truncated_inverse_filter_with, InverseFilter,
+};
