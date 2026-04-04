@@ -1,0 +1,18 @@
+[package]
+name = "deconvolution"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["default-formats"] }
+ndarray = "0.17.2"
+num-complex = "0.4.6"
+rustfft = "6.4.1"
+thiserror = "2.0.18"
+rayon = { version = "1.11.0", optional = true }
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
