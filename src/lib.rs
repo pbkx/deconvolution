@@ -3,6 +3,7 @@ mod core;
 pub mod error;
 pub mod otf;
 pub mod prelude;
+pub mod preprocess;
 pub mod psf;
 pub mod traits;
 
