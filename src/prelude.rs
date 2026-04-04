@@ -1,6 +1,2 @@
-pub mod error;
-pub mod prelude;
-pub mod traits;
-
 pub use crate::error::{Error, Result};
 pub use crate::traits::{Boundary, ChannelMode, Padding, RangePolicy};
