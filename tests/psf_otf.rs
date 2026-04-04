@@ -8,6 +8,7 @@ use deconvolution::{
         support_mask, support_mask_3d, uniform, validate, validate_3d,
     },
     psf::{Blur2D, Blur3D},
+    simulate::{blur, blur_otf, checkerboard_2d},
     Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
 };
 use ndarray::{array, Array2};
@@ -371,4 +372,19 @@ fn oriented_gaussian_and_init_helpers_produce_valid_psf() {
     assert_eq!(masked.as_array()[[2, 3]], 1.0 / 3.0);
     assert_eq!(masked.as_array()[[2, 4]], 1.0 / 3.0);
     assert_eq!(masked.as_array()[[0, 0]], 0.0);
+}
+
+#[test]
+fn blur_matches_otf_blur_shape_and_finiteness() {
+    let input = checkerboard_2d((28, 36), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.1).unwrap();
+    let otf = psf2otf(&psf, input.dim()).unwrap();
+
+    let by_psf = blur(&input, &psf).unwrap();
+    let by_otf = blur_otf(&input, &otf).unwrap();
+
+    assert_eq!(by_psf.dim(), input.dim());
+    assert_eq!(by_otf.dim(), input.dim());
+    assert!(by_psf.iter().all(|value| value.is_finite()));
+    assert!(by_otf.iter().all(|value| value.is_finite()));
 }

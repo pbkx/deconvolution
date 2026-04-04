@@ -5,6 +5,7 @@ pub mod otf;
 pub mod prelude;
 pub mod preprocess;
 pub mod psf;
+pub mod simulate;
 pub mod traits;
 
 pub use crate::core::diagnostics::SolveReport;
