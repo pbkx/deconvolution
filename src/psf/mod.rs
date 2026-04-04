@@ -1,6 +1,13 @@
+mod basic;
+pub mod init;
 mod kernel;
 mod support;
 
+pub use basic::{
+    box2d, box3d, defocus, delta2d, delta3d, disk, gaussian2d, gaussian3d, motion_linear,
+    oriented_gaussian, pillbox,
+};
+pub use init::{from_support, gaussian_guess, motion_guess, uniform};
 pub use kernel::{Blur2D, Blur3D, Kernel2D, Kernel3D};
 pub use support::{
     center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,

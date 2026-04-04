@@ -2,13 +2,15 @@ use deconvolution::{
     otf::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
     psf::{
-        center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,
-        pad_to_3d, support_mask, support_mask_3d, validate, validate_3d,
+        box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus, delta2d, delta3d, disk,
+        flip, flip_3d, from_support, gaussian2d, gaussian3d, gaussian_guess, motion_guess,
+        motion_linear, normalize, normalize_3d, oriented_gaussian, pad_to, pad_to_3d, pillbox,
+        support_mask, support_mask_3d, uniform, validate, validate_3d,
     },
     psf::{Blur2D, Blur3D},
     Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
 };
-use ndarray::array;
+use ndarray::{array, Array2};
 use num_complex::Complex32;
 
 #[test]
@@ -279,4 +281,94 @@ fn support_mask_thresholding_is_stable() {
     let mask3 = support_mask_3d(&psf3, 0.3).unwrap();
     assert!(mask3[[0, 0, 0]]);
     assert!(!mask3[[0, 0, 1]]);
+}
+
+#[test]
+fn basic_generators_are_normalized_and_shape_conformant() {
+    let d2 = delta2d((5, 7)).unwrap();
+    assert_eq!(d2.dims(), (5, 7));
+    assert!((d2.sum() - 1.0).abs() < 1e-6);
+    assert_eq!(d2.as_array()[[2, 3]], 1.0);
+
+    let d3 = delta3d((3, 5, 7)).unwrap();
+    assert_eq!(d3.dims(), (3, 5, 7));
+    assert!((d3.sum() - 1.0).abs() < 1e-6);
+    assert_eq!(d3.as_array()[[1, 2, 3]], 1.0);
+
+    let g2 = gaussian2d((7, 7), 1.2).unwrap();
+    assert!((g2.sum() - 1.0).abs() < 1e-6);
+    assert!((g2.as_array()[[3, 2]] - g2.as_array()[[3, 4]]).abs() < 1e-6);
+    assert!((g2.as_array()[[2, 3]] - g2.as_array()[[4, 3]]).abs() < 1e-6);
+
+    let g3 = gaussian3d((5, 5, 5), 1.0).unwrap();
+    assert!((g3.sum() - 1.0).abs() < 1e-6);
+    assert!((g3.as_array()[[1, 2, 2]] - g3.as_array()[[3, 2, 2]]).abs() < 1e-6);
+
+    let b2 = box2d((3, 5)).unwrap();
+    let b3 = box3d((3, 3, 3)).unwrap();
+    assert!((b2.sum() - 1.0).abs() < 1e-6);
+    assert!((b3.sum() - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn disk_family_support_and_motion_size_behave_sensibly() {
+    let radius = 3.0_f32;
+    let k_disk = disk(radius).unwrap();
+    let k_pill = pillbox(radius).unwrap();
+    let k_defocus = defocus(radius).unwrap();
+
+    assert_eq!(k_disk.dims(), (7, 7));
+    assert_eq!(k_pill.dims(), (7, 7));
+    assert_eq!(k_defocus.dims(), (7, 7));
+    assert!((k_disk.sum() - 1.0).abs() < 1e-6);
+    assert!((k_pill.sum() - 1.0).abs() < 1e-6);
+    assert!((k_defocus.sum() - 1.0).abs() < 1e-6);
+
+    let center = 3_i32;
+    for y in 0..7_i32 {
+        for x in 0..7_i32 {
+            let dy = (y - center) as f32;
+            let dx = (x - center) as f32;
+            if dx * dx + dy * dy > radius * radius {
+                assert_eq!(k_disk.as_array()[[y as usize, x as usize]], 0.0);
+                assert_eq!(k_pill.as_array()[[y as usize, x as usize]], 0.0);
+            }
+        }
+    }
+
+    let m = motion_linear(8.0, 0.0).unwrap();
+    let (mh, mw) = m.dims();
+    assert_eq!(mh, mw);
+    assert_eq!(mh % 2, 1);
+    assert!(mh >= 9);
+    assert!((m.sum() - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn oriented_gaussian_and_init_helpers_produce_valid_psf() {
+    let og = oriented_gaussian((9, 9), 2.0, 0.8, 30.0).unwrap();
+    assert!((og.sum() - 1.0).abs() < 1e-6);
+    validate(&og).unwrap();
+
+    let u = uniform((5, 7)).unwrap();
+    let gg = gaussian_guess((5, 7), 1.0).unwrap();
+    let mg = motion_guess((5, 7), 9.0, 15.0).unwrap();
+    validate(&u).unwrap();
+    validate(&gg).unwrap();
+    validate(&mg).unwrap();
+    assert_eq!(u.dims(), (5, 7));
+    assert_eq!(gg.dims(), (5, 7));
+    assert_eq!(mg.dims(), (5, 7));
+
+    let mut support = Array2::from_elem((5, 7), false);
+    support[[2, 2]] = true;
+    support[[2, 3]] = true;
+    support[[2, 4]] = true;
+    let masked = from_support(&support).unwrap();
+    validate(&masked).unwrap();
+    assert_eq!(masked.dims(), (5, 7));
+    assert_eq!(masked.as_array()[[2, 2]], 1.0 / 3.0);
+    assert_eq!(masked.as_array()[[2, 3]], 1.0 / 3.0);
+    assert_eq!(masked.as_array()[[2, 4]], 1.0 / 3.0);
+    assert_eq!(masked.as_array()[[0, 0]], 0.0);
 }
