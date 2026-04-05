@@ -11,7 +11,8 @@ pub use inverse::{
     InverseFilter, RegularizedInverseFilter, TikhonovInverseFilter,
 };
 pub use iterative::{
-    landweber, landweber_with, van_cittert, van_cittert_with, Landweber, VanCittert,
+    ictm, ictm_with, landweber, landweber_with, tikhonov_miller, tikhonov_miller_with, van_cittert,
+    van_cittert_with, Ictm, Landweber, TikhonovMiller, VanCittert,
 };
 pub use rl::{
     damped_richardson_lucy, damped_richardson_lucy_with, richardson_lucy, richardson_lucy_tv,

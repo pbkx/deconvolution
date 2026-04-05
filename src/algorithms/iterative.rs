@@ -7,6 +7,7 @@ use crate::core::convert::PlanarImage;
 use crate::core::diagnostics::Diagnostics;
 use crate::core::operator::{inner_product_2d, LinearOperator2D};
 use crate::core::projections::project_nonnegative_2d;
+use crate::core::regularizer::RegOperator2D;
 use crate::core::stopping::{check_stop, StopCriteria};
 use crate::preprocess::normalize_range;
 use crate::psf::{validate, Kernel2D};
@@ -144,10 +145,150 @@ impl VanCittert {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TikhonovMiller {
+    iterations: usize,
+    relative_update_tolerance: Option<f32>,
+    step_size: Option<f32>,
+    lambda: f32,
+    positivity: bool,
+    channel_mode: ChannelMode,
+    range_policy: RangePolicy,
+    collect_history: bool,
+}
+
+impl Default for TikhonovMiller {
+    fn default() -> Self {
+        Self {
+            iterations: 40,
+            relative_update_tolerance: None,
+            step_size: None,
+            lambda: 1e-2,
+            positivity: false,
+            channel_mode: ChannelMode::Independent,
+            range_policy: RangePolicy::PreserveInput,
+            collect_history: true,
+        }
+    }
+}
+
+impl TikhonovMiller {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn iterations(mut self, value: usize) -> Self {
+        self.iterations = value;
+        self
+    }
+
+    pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
+        self.relative_update_tolerance = value;
+        self
+    }
+
+    pub fn step_size(mut self, value: Option<f32>) -> Self {
+        self.step_size = value;
+        self
+    }
+
+    pub fn lambda(mut self, value: f32) -> Self {
+        self.lambda = value;
+        self
+    }
+
+    pub fn positivity(mut self, value: bool) -> Self {
+        self.positivity = value;
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.channel_mode = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.collect_history = value;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Ictm {
+    iterations: usize,
+    relative_update_tolerance: Option<f32>,
+    step_size: Option<f32>,
+    lambda: f32,
+    channel_mode: ChannelMode,
+    range_policy: RangePolicy,
+    collect_history: bool,
+}
+
+impl Default for Ictm {
+    fn default() -> Self {
+        Self {
+            iterations: 40,
+            relative_update_tolerance: None,
+            step_size: None,
+            lambda: 1e-2,
+            channel_mode: ChannelMode::Independent,
+            range_policy: RangePolicy::PreserveInput,
+            collect_history: true,
+        }
+    }
+}
+
+impl Ictm {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn iterations(mut self, value: usize) -> Self {
+        self.iterations = value;
+        self
+    }
+
+    pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
+        self.relative_update_tolerance = value;
+        self
+    }
+
+    pub fn step_size(mut self, value: Option<f32>) -> Self {
+        self.step_size = value;
+        self
+    }
+
+    pub fn lambda(mut self, value: f32) -> Self {
+        self.lambda = value;
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.channel_mode = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.collect_history = value;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum IterativeMethod {
     Landweber,
     VanCittert,
+    TikhonovMiller { lambda: f32, constrained: bool },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -211,6 +352,65 @@ pub fn van_cittert_with(
     )
 }
 
+pub fn tikhonov_miller(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+) -> Result<(DynamicImage, SolveReport)> {
+    tikhonov_miller_with(image, psf, &TikhonovMiller::new())
+}
+
+pub fn tikhonov_miller_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &TikhonovMiller,
+) -> Result<(DynamicImage, SolveReport)> {
+    run_iterative(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::TikhonovMiller {
+            lambda: config.lambda,
+            constrained: false,
+        },
+    )
+}
+
+pub fn ictm(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
+    ictm_with(image, psf, &Ictm::new())
+}
+
+pub fn ictm_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &Ictm,
+) -> Result<(DynamicImage, SolveReport)> {
+    run_iterative(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: true,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::TikhonovMiller {
+            lambda: config.lambda,
+            constrained: true,
+        },
+    )
+}
+
 fn run_iterative(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -218,7 +418,7 @@ fn run_iterative(
     method: IterativeMethod,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate(psf)?;
-    validate_config(config)?;
+    validate_config(config, method)?;
 
     let normalized_psf = psf.normalized()?;
     let operator = Convolution2D::new(&normalized_psf)?;
@@ -421,8 +621,11 @@ fn restore_channel(
         return Err(Error::NonFiniteInput);
     }
 
+    let constrained = enforces_nonnegative_constraint(method) || config.positivity;
+    let regularizer = RegOperator2D::Laplacian;
+
     let mut estimate = input.to_owned();
-    if config.positivity {
+    if constrained {
         estimate = project_nonnegative_2d(&estimate)?;
     }
 
@@ -442,14 +645,32 @@ fn restore_channel(
         let direction = match method {
             IterativeMethod::Landweber => operator.adjoint(&residual)?,
             IterativeMethod::VanCittert => residual.to_owned(),
+            IterativeMethod::TikhonovMiller { lambda, .. } => {
+                let data_term = operator.adjoint(&residual)?;
+                let regularized = regularizer.apply(&estimate)?;
+                let regularization_term = regularizer.adjoint(&regularized)?;
+                subtract_scaled(&data_term, &regularization_term, lambda)?
+            }
         };
 
         let mut next = add_scaled(&estimate, &direction, step_size)?;
-        if config.positivity {
+        if constrained {
             next = project_nonnegative_2d(&next)?;
         }
 
-        let objective = 0.5 * squared_l2_norm(&residual)?;
+        let data_objective = 0.5 * squared_l2_norm(&residual)?;
+        let objective = match method {
+            IterativeMethod::TikhonovMiller { lambda, .. } => {
+                let regularized = regularizer.apply(&estimate)?;
+                let penalty = 0.5 * lambda * squared_l2_norm(&regularized)?;
+                let total = data_objective + penalty;
+                if !total.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                total
+            }
+            _ => data_objective,
+        };
         let residual_update = relative_update_norm(&next, &estimate)?;
         diagnostics.record(objective, residual_update)?;
 
@@ -490,8 +711,65 @@ fn resolve_step_size(
     let step_size = match method {
         IterativeMethod::Landweber => 0.9 / norm_squared.max(1.0),
         IterativeMethod::VanCittert => 0.9 / norm_squared.sqrt().max(1.0),
+        IterativeMethod::TikhonovMiller { lambda, .. } => {
+            let system_norm = estimate_tikhonov_system_norm(operator, dims, lambda)?;
+            0.9 / system_norm.max(1.0)
+        }
     };
     validate_step_size(step_size)
+}
+
+fn estimate_tikhonov_system_norm(
+    operator: &Convolution2D,
+    dims: (usize, usize),
+    lambda: f32,
+) -> Result<f32> {
+    if !lambda.is_finite() || lambda < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let regularizer = RegOperator2D::Laplacian;
+    let (height, width) = dims;
+    if height == 0 || width == 0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut vector = Array2::from_elem((height, width), 1.0_f32);
+    normalize_in_place(&mut vector)?;
+
+    for _ in 0..8 {
+        let mut next = tikhonov_system_apply(&vector, operator, regularizer, lambda)?;
+        let norm = l2_norm(&next)?;
+        if norm <= 1e-6 {
+            return Ok(1.0);
+        }
+        scale_in_place(&mut next, 1.0 / norm)?;
+        vector = next;
+    }
+
+    let applied = tikhonov_system_apply(&vector, operator, regularizer, lambda)?;
+    let estimate = inner_product_2d(&vector, &applied)?;
+    if !estimate.is_finite() || estimate <= 0.0 {
+        return Err(Error::ConvergenceFailure);
+    }
+    Ok(estimate)
+}
+
+fn tikhonov_system_apply(
+    input: &Array2<f32>,
+    operator: &Convolution2D,
+    regularizer: RegOperator2D<'_>,
+    lambda: f32,
+) -> Result<Array2<f32>> {
+    if !lambda.is_finite() || lambda < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let applied = operator.apply(input)?;
+    let data_term = operator.adjoint(&applied)?;
+    let regularized = regularizer.apply(input)?;
+    let regularization_term = regularizer.adjoint(&regularized)?;
+    add_scaled(&data_term, &regularization_term, lambda)
 }
 
 fn estimate_operator_norm_squared(operator: &Convolution2D, dims: (usize, usize)) -> Result<f32> {
@@ -598,6 +876,32 @@ fn add_scaled(base: &Array2<f32>, direction: &Array2<f32>, step_size: f32) -> Re
         }
     }
 
+    Ok(output)
+}
+
+fn subtract_scaled(
+    base: &Array2<f32>,
+    direction: &Array2<f32>,
+    weight: f32,
+) -> Result<Array2<f32>> {
+    if base.dim() != direction.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    if !weight.is_finite() || weight < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (height, width) = base.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let value = base[[y, x]] - weight * direction[[y, x]];
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
     Ok(output)
 }
 
@@ -842,7 +1146,14 @@ fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: 
     Ok(())
 }
 
-fn validate_config(config: IterativeConfig) -> Result<()> {
+fn enforces_nonnegative_constraint(method: IterativeMethod) -> bool {
+    match method {
+        IterativeMethod::TikhonovMiller { constrained, .. } => constrained,
+        IterativeMethod::Landweber | IterativeMethod::VanCittert => false,
+    }
+}
+
+fn validate_config(config: IterativeConfig, method: IterativeMethod) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
@@ -853,6 +1164,11 @@ fn validate_config(config: IterativeConfig) -> Result<()> {
     }
     if let Some(step_size) = config.step_size {
         validate_step_size(step_size)?;
+    }
+    if let IterativeMethod::TikhonovMiller { lambda, .. } = method {
+        if !lambda.is_finite() || lambda < 0.0 {
+            return Err(Error::InvalidParameter);
+        }
     }
     Ok(())
 }

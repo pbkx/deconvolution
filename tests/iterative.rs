@@ -1,9 +1,10 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    damped_richardson_lucy_with, landweber, landweber_with, richardson_lucy, richardson_lucy_tv,
-    richardson_lucy_tv_with, richardson_lucy_with, van_cittert, van_cittert_with, Landweber,
-    RichardsonLucy, RichardsonLucyTv, VanCittert,
+    damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, richardson_lucy,
+    richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller,
+    tikhonov_miller_with, van_cittert, van_cittert_with, Ictm, Landweber, RichardsonLucy,
+    RichardsonLucyTv, TikhonovMiller, VanCittert,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -430,6 +431,82 @@ fn landweber_and_van_cittert_default_paths_are_finite() {
     assert!(is_finite_2d(&gray_to_array(&van_restored.to_luma8())));
     assert!(landweber_report.iterations >= 1);
     assert!(van_report.iterations >= 1);
+}
+
+#[test]
+fn tikhonov_miller_improves_over_blurred_baseline_on_noisy_input() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 96.0, 42042).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = tikhonov_miller_with(
+        &degraded_image,
+        &psf,
+        &TikhonovMiller::new()
+            .iterations(18)
+            .lambda(5.0e-4)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(is_finite_2d(&restored_array));
+    assert!(report.objective_history.len() >= 2);
+    assert!(report.residual_history.len() >= 2);
+}
+
+#[test]
+fn ictm_is_nonnegative_and_improves_over_blurred_baseline_on_noisy_input() {
+    let sharp = checkerboard_2d((62, 58), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 88.0, 90919).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = ictm_with(
+        &degraded_image,
+        &psf,
+        &Ictm::new()
+            .iterations(18)
+            .lambda(6.0e-4)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(restored_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(report.objective_history.len() >= 2);
+}
+
+#[test]
+fn tikhonov_miller_and_ictm_default_paths_are_finite() {
+    let sharp = checkerboard_2d((44, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 313).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (tikhonov_restored, tikhonov_report) = tikhonov_miller(&degraded_image, &psf).unwrap();
+    let (ictm_restored, ictm_report) = ictm(&degraded_image, &psf).unwrap();
+
+    let tikhonov_array = gray_to_array(&tikhonov_restored.to_luma8());
+    let ictm_array = gray_to_array(&ictm_restored.to_luma8());
+    assert!(is_finite_2d(&tikhonov_array));
+    assert!(is_finite_2d(&ictm_array));
+    assert!(ictm_array.iter().all(|value| *value >= 0.0));
+    assert!(tikhonov_report.iterations >= 1);
+    assert!(ictm_report.iterations >= 1);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
