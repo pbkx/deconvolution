@@ -1,4 +1,5 @@
 mod inverse;
+mod proximal;
 mod rl;
 mod wiener;
 
@@ -9,8 +10,8 @@ pub use inverse::{
     InverseFilter, RegularizedInverseFilter, TikhonovInverseFilter,
 };
 pub use rl::{
-    damped_richardson_lucy, damped_richardson_lucy_with, richardson_lucy, richardson_lucy_with,
-    RichardsonLucy,
+    damped_richardson_lucy, damped_richardson_lucy_with, richardson_lucy, richardson_lucy_tv,
+    richardson_lucy_tv_with, richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
 };
 pub use wiener::{
     unsupervised_wiener, unsupervised_wiener_with, wiener, wiener_with, UnsupervisedWiener, Wiener,

@@ -1,7 +1,8 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    damped_richardson_lucy_with, richardson_lucy, richardson_lucy_with, RichardsonLucy,
+    damped_richardson_lucy_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with,
+    richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -194,6 +195,100 @@ fn readout_noise_path_is_finite_and_deterministic() {
     let second_arr = gray_to_array(&second.to_luma8());
     assert!(is_finite_2d(&first_arr));
     assert!(is_finite_2d(&second_arr));
+    assert!(arrays_equal_2d(&first_arr, &second_arr));
+    assert_eq!(
+        first_report.objective_history,
+        second_report.objective_history
+    );
+    assert_eq!(
+        first_report.residual_history,
+        second_report.residual_history
+    );
+}
+
+#[test]
+fn richardson_lucy_tv_has_lower_total_variation_than_plain_rl() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((11, 11), 1.9).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 10.0, 202603).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (plain, _) = richardson_lucy_with(
+        &degraded_image,
+        &psf,
+        &RichardsonLucy::new()
+            .iterations(34)
+            .filter_epsilon(1e-3)
+            .collect_history(false),
+    )
+    .unwrap();
+    let (tv, _) = richardson_lucy_tv_with(
+        &degraded_image,
+        &psf,
+        &RichardsonLucyTv::new()
+            .iterations(34)
+            .filter_epsilon(1e-3)
+            .tv_weight(2.5e-2)
+            .tv_epsilon(1e-3)
+            .collect_history(false),
+    )
+    .unwrap();
+
+    let plain_tv = total_variation(&gray_to_array(&plain.to_luma8()));
+    let tv_regularized_tv = total_variation(&gray_to_array(&tv.to_luma8()));
+    assert!(tv_regularized_tv < plain_tv);
+}
+
+#[test]
+fn richardson_lucy_tv_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((60, 60), 5, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 8080).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, _) = richardson_lucy_tv_with(
+        &degraded_image,
+        &psf,
+        &RichardsonLucyTv::new()
+            .iterations(24)
+            .filter_epsilon(1e-3)
+            .tv_weight(1.2e-2)
+            .collect_history(false),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+}
+
+#[test]
+fn richardson_lucy_tv_is_nonnegative_finite_and_deterministic() {
+    let sharp = checkerboard_2d((46, 50), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 18.0, 91011).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+    let config = RichardsonLucyTv::new()
+        .iterations(22)
+        .filter_epsilon(1e-3)
+        .tv_weight(1.8e-2)
+        .collect_history(true);
+
+    let (first, first_report) = richardson_lucy_tv_with(&degraded_image, &psf, &config).unwrap();
+    let (second, second_report) = richardson_lucy_tv_with(&degraded_image, &psf, &config).unwrap();
+    let (default_path, _) = richardson_lucy_tv(&degraded_image, &psf).unwrap();
+
+    let first_arr = gray_to_array(&first.to_luma8());
+    let second_arr = gray_to_array(&second.to_luma8());
+    let default_arr = gray_to_array(&default_path.to_luma8());
+    assert!(first_arr.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&first_arr));
+    assert!(is_finite_2d(&default_arr));
     assert!(arrays_equal_2d(&first_arr, &second_arr));
     assert_eq!(
         first_report.objective_history,

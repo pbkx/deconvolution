@@ -1,6 +1,7 @@
 use image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
 use ndarray::{Array2, Array3, Axis};
 
+use super::proximal::tv_regularize_step_2d;
 use crate::core::color::sample_from_f32;
 use crate::core::conv::Convolution2D;
 use crate::core::convert::PlanarImage;
@@ -104,6 +105,100 @@ impl RichardsonLucy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RichardsonLucyTv {
+    base: RichardsonLucy,
+    tv_weight: f32,
+    tv_epsilon: f32,
+}
+
+impl Default for RichardsonLucyTv {
+    fn default() -> Self {
+        Self {
+            base: RichardsonLucy::default(),
+            tv_weight: 1e-2,
+            tv_epsilon: 1e-3,
+        }
+    }
+}
+
+impl RichardsonLucyTv {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn iterations(mut self, value: usize) -> Self {
+        self.base = self.base.iterations(value);
+        self
+    }
+
+    pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
+        self.base = self.base.relative_update_tolerance(value);
+        self
+    }
+
+    pub fn filter_epsilon(mut self, value: f32) -> Self {
+        self.base = self.base.filter_epsilon(value);
+        self
+    }
+
+    pub fn damping(mut self, value: Option<f32>) -> Self {
+        self.base = self.base.damping(value);
+        self
+    }
+
+    pub fn weights(mut self, value: Array2<f32>) -> Self {
+        self.base = self.base.weights(value);
+        self
+    }
+
+    pub fn clear_weights(mut self) -> Self {
+        self.base = self.base.clear_weights();
+        self
+    }
+
+    pub fn readout_noise(mut self, value: f32) -> Self {
+        self.base = self.base.readout_noise(value);
+        self
+    }
+
+    pub fn positivity(mut self, value: bool) -> Self {
+        self.base = self.base.positivity(value);
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.base = self.base.channel_mode(value);
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.base = self.base.range_policy(value);
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.base = self.base.collect_history(value);
+        self
+    }
+
+    pub fn tv_weight(mut self, value: f32) -> Self {
+        self.tv_weight = value;
+        self
+    }
+
+    pub fn tv_epsilon(mut self, value: f32) -> Self {
+        self.tv_epsilon = value;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Regularization {
+    None,
+    Tv { weight: f32, epsilon: f32 },
+}
+
 pub fn richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -116,7 +211,7 @@ pub fn richardson_lucy_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(DynamicImage, SolveReport)> {
-    run_richardson_lucy(image, psf, config, false)
+    run_richardson_lucy(image, psf, config, false, Regularization::None)
 }
 
 pub fn damped_richardson_lucy(
@@ -131,7 +226,27 @@ pub fn damped_richardson_lucy_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(DynamicImage, SolveReport)> {
-    run_richardson_lucy(image, psf, config, true)
+    run_richardson_lucy(image, psf, config, true, Regularization::None)
+}
+
+pub fn richardson_lucy_tv(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+) -> Result<(DynamicImage, SolveReport)> {
+    richardson_lucy_tv_with(image, psf, &RichardsonLucyTv::new())
+}
+
+pub fn richardson_lucy_tv_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &RichardsonLucyTv,
+) -> Result<(DynamicImage, SolveReport)> {
+    validate_tv_config(config)?;
+    let regularization = Regularization::Tv {
+        weight: config.tv_weight,
+        epsilon: config.tv_epsilon,
+    };
+    run_richardson_lucy(image, psf, &config.base, false, regularization)
 }
 
 fn run_richardson_lucy(
@@ -139,10 +254,12 @@ fn run_richardson_lucy(
     psf: &Kernel2D,
     config: &RichardsonLucy,
     force_damping: bool,
+    regularization: Regularization,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate(psf)?;
     let effective_config = resolve_effective_config(config, force_damping);
     validate_config(&effective_config)?;
+    validate_regularization(regularization)?;
 
     let normalized_psf = psf.normalized()?;
     let op = Convolution2D::new(&normalized_psf)?;
@@ -154,8 +271,13 @@ fn run_richardson_lucy(
         return Err(Error::EmptyImage);
     }
 
-    let (restored_color, report) =
-        restore_color(planar.color(), planar.alpha(), &op, &effective_config)?;
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        &op,
+        &effective_config,
+        regularization,
+    )?;
     let restored = rebuild_image(image, &restored_color)?;
     Ok((restored, report))
 }
@@ -165,6 +287,7 @@ fn restore_color(
     alpha: Option<&Array2<f32>>,
     operator: &Convolution2D,
     config: &RichardsonLucy,
+    regularization: Regularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let shape = color.shape();
     if shape.len() != 3 {
@@ -179,10 +302,12 @@ fn restore_color(
 
     match config.channel_mode {
         ChannelMode::Independent | ChannelMode::IgnoreAlpha => {
-            restore_independent(color, operator, config)
+            restore_independent(color, operator, config, regularization)
         }
-        ChannelMode::LumaOnly => restore_luma_only(color, operator, config),
-        ChannelMode::PremultipliedAlpha => restore_premultiplied(color, alpha, operator, config),
+        ChannelMode::LumaOnly => restore_luma_only(color, operator, config, regularization),
+        ChannelMode::PremultipliedAlpha => {
+            restore_premultiplied(color, alpha, operator, config, regularization)
+        }
     }
 }
 
@@ -190,6 +315,7 @@ fn restore_independent(
     color: &Array3<f32>,
     operator: &Convolution2D,
     config: &RichardsonLucy,
+    regularization: Regularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
@@ -199,7 +325,7 @@ fn restore_independent(
 
     for channel_idx in 0..channels {
         let channel = color.index_axis(Axis(0), channel_idx).to_owned();
-        let (restored, report) = restore_channel(&channel, operator, config)?;
+        let (restored, report) = restore_channel(&channel, operator, config, regularization)?;
         reports.push(report);
         for y in 0..height {
             for x in 0..width {
@@ -216,12 +342,13 @@ fn restore_luma_only(
     color: &Array3<f32>,
     operator: &Convolution2D,
     config: &RichardsonLucy,
+    regularization: Regularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
     let width = color.shape()[2];
     if channels == 1 {
-        return restore_independent(color, operator, config);
+        return restore_independent(color, operator, config, regularization);
     }
 
     let mut luma = Array2::zeros((height, width));
@@ -234,7 +361,7 @@ fn restore_luma_only(
         }
     }
 
-    let (restored_luma, report) = restore_channel(&luma, operator, config)?;
+    let (restored_luma, report) = restore_channel(&luma, operator, config, regularization)?;
     let mut output = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
@@ -263,16 +390,17 @@ fn restore_premultiplied(
     alpha: Option<&Array2<f32>>,
     operator: &Convolution2D,
     config: &RichardsonLucy,
+    regularization: Regularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let Some(alpha) = alpha else {
-        return restore_independent(color, operator, config);
+        return restore_independent(color, operator, config, regularization);
     };
 
     let channels = color.shape()[0];
     let height = color.shape()[1];
     let width = color.shape()[2];
     if channels != 3 || alpha.dim() != (height, width) {
-        return restore_independent(color, operator, config);
+        return restore_independent(color, operator, config, regularization);
     }
 
     let mut premultiplied = Array3::zeros((channels, height, width));
@@ -285,7 +413,7 @@ fn restore_premultiplied(
         }
     }
 
-    let (restored, report) = restore_independent(&premultiplied, operator, config)?;
+    let (restored, report) = restore_independent(&premultiplied, operator, config, regularization)?;
     let mut output = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
@@ -317,6 +445,7 @@ fn restore_channel(
     input: &Array2<f32>,
     operator: &Convolution2D,
     config: &RichardsonLucy,
+    regularization: Regularization,
 ) -> Result<(Array2<f32>, SolveReport)> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
@@ -352,6 +481,7 @@ fn restore_channel(
         if config.positivity {
             next = project_nonnegative_2d(&next)?;
         }
+        next = apply_regularization(&next, regularization, config.positivity)?;
 
         let objective =
             poisson_objective(input, &blurred, config.filter_epsilon, config.readout_noise)?;
@@ -452,6 +582,23 @@ fn apply_damping(correction: &Array2<f32>, damping: Option<f32>) -> Result<Array
         }
     }
     Ok(output)
+}
+
+fn apply_regularization(
+    input: &Array2<f32>,
+    regularization: Regularization,
+    positivity: bool,
+) -> Result<Array2<f32>> {
+    match regularization {
+        Regularization::None => Ok(input.to_owned()),
+        Regularization::Tv { weight, epsilon } => {
+            let mut output = tv_regularize_step_2d(input, weight, epsilon)?;
+            if positivity {
+                output = project_nonnegative_2d(&output)?;
+            }
+            Ok(output)
+        }
+    }
 }
 
 fn elementwise_mul(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<Array2<f32>> {
@@ -755,6 +902,32 @@ fn resolve_weights(
     }
 
     Ok(Some(weights))
+}
+
+fn validate_tv_config(config: &RichardsonLucyTv) -> Result<()> {
+    validate_config(&config.base)?;
+    if !config.tv_weight.is_finite() || config.tv_weight < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !config.tv_epsilon.is_finite() || config.tv_epsilon <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn validate_regularization(regularization: Regularization) -> Result<()> {
+    match regularization {
+        Regularization::None => Ok(()),
+        Regularization::Tv { weight, epsilon } => {
+            if !weight.is_finite() || weight < 0.0 {
+                return Err(Error::InvalidParameter);
+            }
+            if !epsilon.is_finite() || epsilon <= 0.0 {
+                return Err(Error::InvalidParameter);
+            }
+            Ok(())
+        }
+    }
 }
 
 fn validate_config(config: &RichardsonLucy) -> Result<()> {
