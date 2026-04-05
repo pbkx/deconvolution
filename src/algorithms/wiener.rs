@@ -10,7 +10,7 @@ use crate::core::util::next_fast_len;
 use crate::otf::{psf2otf, Transfer2D};
 use crate::preprocess::normalize_range;
 use crate::psf::{validate, Kernel2D};
-use crate::{Boundary, ChannelMode, Error, Padding, RangePolicy, Result};
+use crate::{Boundary, ChannelMode, Error, Padding, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Wiener {
@@ -85,6 +85,93 @@ impl Wiener {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnsupervisedWiener {
+    initial_nsr: f32,
+    min_nsr: f32,
+    max_iterations: usize,
+    min_iterations: usize,
+    tolerance: f32,
+    boundary: Boundary,
+    padding: Padding,
+    channel_mode: ChannelMode,
+    range_policy: RangePolicy,
+    collect_history: bool,
+}
+
+impl Default for UnsupervisedWiener {
+    fn default() -> Self {
+        Self {
+            initial_nsr: 1e-2,
+            min_nsr: 1e-8,
+            max_iterations: 30,
+            min_iterations: 3,
+            tolerance: 1e-3,
+            boundary: Boundary::Reflect,
+            padding: Padding::None,
+            channel_mode: ChannelMode::Independent,
+            range_policy: RangePolicy::PreserveInput,
+            collect_history: false,
+        }
+    }
+}
+
+impl UnsupervisedWiener {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn initial_nsr(mut self, value: f32) -> Self {
+        self.initial_nsr = value;
+        self
+    }
+
+    pub fn min_nsr(mut self, value: f32) -> Self {
+        self.min_nsr = value;
+        self
+    }
+
+    pub fn max_iterations(mut self, value: usize) -> Self {
+        self.max_iterations = value;
+        self
+    }
+
+    pub fn min_iterations(mut self, value: usize) -> Self {
+        self.min_iterations = value;
+        self
+    }
+
+    pub fn tolerance(mut self, value: f32) -> Self {
+        self.tolerance = value;
+        self
+    }
+
+    pub fn boundary(mut self, value: Boundary) -> Self {
+        self.boundary = value;
+        self
+    }
+
+    pub fn padding(mut self, value: Padding) -> Self {
+        self.padding = value;
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.channel_mode = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.collect_history = value;
+        self
+    }
+}
+
 pub fn wiener(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     wiener_with(image, psf, &Wiener::new())
 }
@@ -119,6 +206,99 @@ pub fn wiener_with(image: &DynamicImage, psf: &Kernel2D, config: &Wiener) -> Res
     rebuild_image(image, &restored_color)
 }
 
+pub fn unsupervised_wiener(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+) -> Result<(DynamicImage, SolveReport)> {
+    unsupervised_wiener_with(image, psf, &UnsupervisedWiener::new())
+}
+
+pub fn unsupervised_wiener_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &UnsupervisedWiener,
+) -> Result<(DynamicImage, SolveReport)> {
+    validate(psf)?;
+    validate_unsupervised_config(config)?;
+
+    let planar = PlanarImage::from_dynamic(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let fft_dims = resolve_fft_dims((height, width), psf.dims(), config.padding)?;
+    let blur_transfer = psf2otf(psf, fft_dims)?.into_inner();
+
+    let mut nsr = config.initial_nsr.max(config.min_nsr);
+    let mut objective_history = Vec::with_capacity(config.max_iterations);
+    let mut residual_history = Vec::with_capacity(config.max_iterations);
+    let mut stop_reason = StopReason::MaxIterations;
+    let mut iterations = 0usize;
+
+    for iteration in 0..config.max_iterations {
+        iterations = iteration + 1;
+        let iteration_config = unsupervised_iteration_config(config, nsr, true);
+        let correlation = resolve_correlation_form(&iteration_config, fft_dims)?;
+        let (_, stats) = restore_color(
+            planar.color(),
+            planar.alpha(),
+            &blur_transfer,
+            correlation,
+            &iteration_config,
+        )?;
+        validate_stats(&stats)?;
+
+        let estimated_nsr = estimate_nsr_from_stats(&stats, config.min_nsr)?;
+        let relative_update = relative_change(nsr, estimated_nsr)?;
+        objective_history.push(estimated_nsr);
+        residual_history.push(relative_update);
+        nsr = estimated_nsr;
+
+        let step = iteration + 1;
+        if step >= config.min_iterations && relative_update <= config.tolerance {
+            stop_reason = StopReason::RelativeUpdate;
+            break;
+        }
+    }
+
+    let final_config = unsupervised_iteration_config(config, nsr, config.collect_history);
+    let correlation = resolve_correlation_form(&final_config, fft_dims)?;
+    let (restored_color, stats) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        &blur_transfer,
+        correlation,
+        &final_config,
+    )?;
+    if config.collect_history {
+        validate_stats(&stats)?;
+    }
+
+    let objective_history = if config.collect_history {
+        objective_history
+    } else {
+        Vec::new()
+    };
+    let residual_history = if config.collect_history {
+        residual_history
+    } else {
+        Vec::new()
+    };
+    let report = SolveReport {
+        iterations,
+        stop_reason,
+        objective_history,
+        residual_history,
+        estimated_nsr: Some(nsr),
+    };
+
+    let restored = rebuild_image(image, &restored_color)?;
+    Ok((restored, report))
+}
+
 #[derive(Debug, Clone, Copy)]
 enum CorrelationForm<'a> {
     ScalarNsr(f32),
@@ -132,6 +312,8 @@ enum CorrelationForm<'a> {
 struct ChannelStats {
     mean_denom: f32,
     mean_filter_norm: f32,
+    signal_power: f32,
+    noise_power: f32,
 }
 
 fn resolve_correlation_form<'a>(
@@ -372,6 +554,8 @@ fn apply_wiener(
 
     let mut denom_sum = 0.0_f32;
     let mut filter_sum = 0.0_f32;
+    let mut signal_sum = 0.0_f32;
+    let mut noise_sum = 0.0_f32;
     let mut count = 0usize;
 
     for ((y, x), value) in spectrum.indexed_iter_mut() {
@@ -391,14 +575,21 @@ fn apply_wiener(
 
         let denom = (h.norm_sqr() + ratio).max(1e-8);
         let filter = h.conj() / denom;
-        let restored = filter * *value;
+        let observed = *value;
+        let restored = filter * observed;
         if !restored.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        let residual = observed - h * restored;
+        if !residual.is_finite() {
             return Err(Error::NonFiniteInput);
         }
 
         *value = restored;
         denom_sum += denom;
         filter_sum += filter.norm();
+        signal_sum += restored.norm_sqr();
+        noise_sum += residual.norm_sqr();
         count += 1;
     }
 
@@ -409,6 +600,8 @@ fn apply_wiener(
     Ok(ChannelStats {
         mean_denom: denom_sum * inv,
         mean_filter_norm: filter_sum * inv,
+        signal_power: signal_sum * inv,
+        noise_power: noise_sum * inv,
     })
 }
 
@@ -648,11 +841,61 @@ fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: 
 
 fn validate_stats(stats: &[ChannelStats]) -> Result<()> {
     for stat in stats {
-        if !stat.mean_denom.is_finite() || !stat.mean_filter_norm.is_finite() {
+        if !stat.mean_denom.is_finite()
+            || !stat.mean_filter_norm.is_finite()
+            || !stat.signal_power.is_finite()
+            || !stat.noise_power.is_finite()
+        {
             return Err(Error::NonFiniteInput);
         }
     }
     Ok(())
+}
+
+fn estimate_nsr_from_stats(stats: &[ChannelStats], min_nsr: f32) -> Result<f32> {
+    if stats.is_empty() {
+        return Err(Error::InvalidParameter);
+    }
+    if !min_nsr.is_finite() || min_nsr <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut signal = 0.0_f32;
+    let mut noise = 0.0_f32;
+    for stat in stats {
+        if stat.signal_power < 0.0 || stat.noise_power < 0.0 {
+            return Err(Error::InvalidParameter);
+        }
+        signal += stat.signal_power;
+        noise += stat.noise_power;
+    }
+
+    if !signal.is_finite() || !noise.is_finite() {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let estimated = if signal <= f32::EPSILON {
+        min_nsr
+    } else {
+        (noise / signal).max(min_nsr)
+    };
+    if !estimated.is_finite() || estimated <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(estimated)
+}
+
+fn relative_change(previous: f32, current: f32) -> Result<f32> {
+    if !previous.is_finite() || !current.is_finite() || previous < 0.0 || current < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let scale = previous.max(1e-8);
+    let value = (current - previous).abs() / scale;
+    if !value.is_finite() {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(value)
 }
 
 fn validate_config(config: &Wiener) -> Result<()> {
@@ -663,4 +906,40 @@ fn validate_config(config: &Wiener) -> Result<()> {
         return Err(Error::InvalidParameter);
     }
     Ok(())
+}
+
+fn validate_unsupervised_config(config: &UnsupervisedWiener) -> Result<()> {
+    if !config.initial_nsr.is_finite() || config.initial_nsr < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !config.min_nsr.is_finite() || config.min_nsr <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if config.max_iterations == 0 {
+        return Err(Error::InvalidParameter);
+    }
+    if config.min_iterations == 0 || config.min_iterations > config.max_iterations {
+        return Err(Error::InvalidParameter);
+    }
+    if !config.tolerance.is_finite() || config.tolerance < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if let Padding::Explicit3(_, _, _) = config.padding {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn unsupervised_iteration_config(
+    config: &UnsupervisedWiener,
+    nsr: f32,
+    collect_history: bool,
+) -> Wiener {
+    Wiener::new()
+        .nsr(nsr)
+        .boundary(config.boundary)
+        .padding(config.padding)
+        .channel_mode(config.channel_mode)
+        .range_policy(config.range_policy)
+        .collect_history(collect_history)
 }

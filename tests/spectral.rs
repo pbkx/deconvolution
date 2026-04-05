@@ -8,9 +8,9 @@ use deconvolution::simulate::{
 };
 use deconvolution::{
     inverse_filter, inverse_filter_with, naive_inverse_filter, regularized_inverse_filter_with,
-    tikhonov_inverse_filter_with, truncated_inverse_filter_with, wiener, wiener_with,
-    InverseFilter, Padding, RegOperator2D, RegularizedInverseFilter, TikhonovInverseFilter,
-    Transfer2D, Wiener,
+    tikhonov_inverse_filter_with, truncated_inverse_filter_with, unsupervised_wiener,
+    unsupervised_wiener_with, wiener, wiener_with, InverseFilter, Padding, RegOperator2D,
+    RegularizedInverseFilter, TikhonovInverseFilter, Transfer2D, UnsupervisedWiener, Wiener,
 };
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 use ndarray::{array, Array2};
@@ -402,6 +402,80 @@ fn wiener_autocorrelation_form_is_finite_and_shape_preserving() {
     let restored_arr = gray_to_array(&restored.to_luma8());
     assert_eq!(restored_arr.dim(), input.dim());
     assert!(restored_arr.iter().all(|value| value.is_finite()));
+}
+
+#[test]
+fn unsupervised_wiener_improves_over_blurred_baseline_without_manual_nsr() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.03, 1729).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+
+    let (restored, report) = unsupervised_wiener(&noisy_img, &psf).unwrap();
+    let sharp_arr = sharp;
+    let baseline_arr = gray_to_array(&noisy_img.to_luma8());
+    let restored_arr = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp_arr, &baseline_arr).unwrap();
+    let restored_psnr = psnr(&sharp_arr, &restored_arr).unwrap();
+
+    assert!(restored_psnr > baseline_psnr);
+    assert!(report.estimated_nsr.unwrap().is_finite());
+}
+
+#[test]
+fn unsupervised_wiener_learned_nsr_is_positive_and_finite() {
+    let sharp = checkerboard_2d((56, 56), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.3).unwrap();
+    let degraded = degrade(&sharp, &psf, Some(0.02), Some(24.0), Some(0.005), 303).unwrap();
+    let degraded_img = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let config = UnsupervisedWiener::new()
+        .initial_nsr(5e-3)
+        .max_iterations(25)
+        .min_iterations(2)
+        .tolerance(5e-4)
+        .padding(Padding::NextFastLen)
+        .collect_history(true);
+    let (_, report) = unsupervised_wiener_with(&degraded_img, &psf, &config).unwrap();
+
+    let estimated_nsr = report.estimated_nsr.unwrap();
+    assert!(estimated_nsr.is_finite());
+    assert!(estimated_nsr > 0.0);
+    assert!(report.iterations >= 1);
+    assert_eq!(
+        report.objective_history.len(),
+        report.residual_history.len()
+    );
+    assert!(!report.objective_history.is_empty());
+}
+
+#[test]
+fn unsupervised_wiener_is_deterministic() {
+    let sharp = checkerboard_2d((48, 52), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.025, 909).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+
+    let config = UnsupervisedWiener::new()
+        .max_iterations(20)
+        .min_iterations(2)
+        .tolerance(1e-3)
+        .collect_history(true);
+    let (first, report_first) = unsupervised_wiener_with(&noisy_img, &psf, &config).unwrap();
+    let (second, report_second) = unsupervised_wiener_with(&noisy_img, &psf, &config).unwrap();
+
+    assert_eq!(first.to_luma8(), second.to_luma8());
+    assert_eq!(report_first.estimated_nsr, report_second.estimated_nsr);
+    assert_eq!(
+        report_first.objective_history,
+        report_second.objective_history
+    );
+    assert_eq!(
+        report_first.residual_history,
+        report_second.residual_history
+    );
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {

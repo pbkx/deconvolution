@@ -8,6 +8,7 @@ pub struct SolveReport {
     pub stop_reason: StopReason,
     pub objective_history: Vec<f32>,
     pub residual_history: Vec<f32>,
+    pub estimated_nsr: Option<f32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -45,6 +46,7 @@ impl Diagnostics {
             stop_reason,
             objective_history: self.objective_history,
             residual_history: self.residual_history,
+            estimated_nsr: None,
         }
     }
 }
@@ -72,5 +74,6 @@ mod tests {
         assert_eq!(report.stop_reason, StopReason::RelativeUpdate);
         assert_eq!(report.objective_history, vec![10.0_f32, 8.0_f32, 7.0_f32]);
         assert_eq!(report.residual_history, vec![3.0_f32, 2.0_f32, 1.0_f32]);
+        assert_eq!(report.estimated_nsr, None);
     }
 }

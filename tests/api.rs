@@ -60,6 +60,7 @@ fn prelude_reexports_compile() {
         stop_reason,
         objective_history: Vec::new(),
         residual_history: Vec::new(),
+        estimated_nsr: None,
     };
 
     assert_eq!(boundary, PreludeBoundary::Symmetric);
@@ -79,6 +80,7 @@ fn pr05_public_items_compile_and_behave() {
         stop_reason,
         objective_history: vec![5.0_f32, 4.0_f32, 3.5_f32],
         residual_history: vec![2.0_f32, 1.0_f32, 0.8_f32],
+        estimated_nsr: None,
     };
 
     assert_eq!(report.stop_reason, StopReason::RelativeUpdate);

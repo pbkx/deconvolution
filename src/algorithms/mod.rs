@@ -7,4 +7,6 @@ pub use inverse::{
     tikhonov_inverse_filter_with, truncated_inverse_filter, truncated_inverse_filter_with,
     InverseFilter, RegularizedInverseFilter, TikhonovInverseFilter,
 };
-pub use wiener::{wiener, wiener_with, Wiener};
+pub use wiener::{
+    unsupervised_wiener, unsupervised_wiener_with, wiener, wiener_with, UnsupervisedWiener, Wiener,
+};
