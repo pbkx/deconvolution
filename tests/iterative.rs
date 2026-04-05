@@ -1,10 +1,11 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    bvls, bvls_with, damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, nnls,
-    nnls_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with,
-    tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with, Bvls, Ictm, Landweber,
-    Nnls, RichardsonLucy, RichardsonLucyTv, TikhonovMiller, VanCittert,
+    bvls, bvls_with, damped_richardson_lucy_with, fista, fista_with, ictm, ictm_with, ista,
+    ista_with, landweber, landweber_with, nnls, nnls_with, richardson_lucy, richardson_lucy_tv,
+    richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller, tikhonov_miller_with,
+    van_cittert, van_cittert_with, Bvls, Fista, Ictm, Ista, Landweber, Nnls, RichardsonLucy,
+    RichardsonLucyTv, SparseBasis, TikhonovMiller, VanCittert,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -636,6 +637,139 @@ fn nnls_and_bvls_default_paths_are_finite_and_improve_over_blurred_baseline() {
     assert!(bvls_array.iter().all(|value| *value >= 0.0));
     assert!(nnls_report.iterations >= 1);
     assert!(bvls_report.iterations >= 1);
+}
+
+#[test]
+fn ista_and_fista_improve_over_blurred_baseline_and_are_finite() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 1917).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let config_ista = Ista::new()
+        .iterations(24)
+        .lambda(0.35)
+        .basis(SparseBasis::Pixel)
+        .collect_history(true);
+    let config_fista = Fista::new()
+        .iterations(24)
+        .lambda(0.35)
+        .basis(SparseBasis::Pixel)
+        .collect_history(true);
+    let (ista_restored, ista_report) = ista_with(&degraded_image, &psf, &config_ista).unwrap();
+    let (fista_restored, fista_report) = fista_with(&degraded_image, &psf, &config_fista).unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let ista_array = gray_to_array(&ista_restored.to_luma8());
+    let fista_array = gray_to_array(&fista_restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let ista_psnr = psnr(&sharp, &ista_array).unwrap();
+    let fista_psnr = psnr(&sharp, &fista_array).unwrap();
+
+    assert!(ista_psnr > baseline_psnr);
+    assert!(fista_psnr > baseline_psnr);
+    assert!(is_finite_2d(&ista_array));
+    assert!(is_finite_2d(&fista_array));
+    assert!(ista_array.iter().all(|value| *value >= 0.0));
+    assert!(fista_array.iter().all(|value| *value >= 0.0));
+    assert!(ista_report.objective_history.len() >= 2);
+    assert!(fista_report.objective_history.len() >= 2);
+}
+
+#[test]
+fn fista_converges_faster_than_ista_with_equal_iterations() {
+    let sharp = checkerboard_2d((60, 60), 5, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let iterations = 20usize;
+    let config_ista = Ista::new()
+        .iterations(iterations)
+        .lambda(0.3)
+        .basis(SparseBasis::Pixel)
+        .collect_history(true);
+    let config_fista = Fista::new()
+        .iterations(iterations)
+        .lambda(0.3)
+        .basis(SparseBasis::Pixel)
+        .collect_history(true);
+    let (_, ista_report) = ista_with(&degraded_image, &psf, &config_ista).unwrap();
+    let (_, fista_report) = fista_with(&degraded_image, &psf, &config_fista).unwrap();
+
+    let ista_last_objective = *ista_report.objective_history.last().unwrap();
+    let fista_last_objective = *fista_report.objective_history.last().unwrap();
+    let ista_last_residual = *ista_report.residual_history.last().unwrap();
+    let fista_last_residual = *fista_report.residual_history.last().unwrap();
+    assert!(
+        fista_last_objective <= ista_last_objective || fista_last_residual <= ista_last_residual
+    );
+}
+
+#[test]
+fn haar_basis_paths_are_finite_and_deterministic() {
+    let sharp = checkerboard_2d((46, 50), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.3).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 22.0, 55511).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let ista_config = Ista::new()
+        .iterations(18)
+        .lambda(0.3)
+        .basis(SparseBasis::Haar)
+        .collect_history(true);
+    let fista_config = Fista::new()
+        .iterations(18)
+        .lambda(0.3)
+        .basis(SparseBasis::Haar)
+        .collect_history(true);
+
+    let (ista_first, ista_first_report) = ista_with(&degraded_image, &psf, &ista_config).unwrap();
+    let (ista_second, ista_second_report) = ista_with(&degraded_image, &psf, &ista_config).unwrap();
+    let (fista_first, fista_first_report) =
+        fista_with(&degraded_image, &psf, &fista_config).unwrap();
+    let (fista_second, fista_second_report) =
+        fista_with(&degraded_image, &psf, &fista_config).unwrap();
+
+    let ista_first_array = gray_to_array(&ista_first.to_luma8());
+    let ista_second_array = gray_to_array(&ista_second.to_luma8());
+    let fista_first_array = gray_to_array(&fista_first.to_luma8());
+    let fista_second_array = gray_to_array(&fista_second.to_luma8());
+    assert!(is_finite_2d(&ista_first_array));
+    assert!(is_finite_2d(&fista_first_array));
+    assert!(arrays_equal_2d(&ista_first_array, &ista_second_array));
+    assert!(arrays_equal_2d(&fista_first_array, &fista_second_array));
+    assert_eq!(
+        ista_first_report.objective_history,
+        ista_second_report.objective_history
+    );
+    assert_eq!(
+        fista_first_report.objective_history,
+        fista_second_report.objective_history
+    );
+}
+
+#[test]
+fn ista_and_fista_default_paths_are_finite() {
+    let sharp = checkerboard_2d((44, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 20.0, 4777).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (ista_restored, ista_report) = ista(&degraded_image, &psf).unwrap();
+    let (fista_restored, fista_report) = fista(&degraded_image, &psf).unwrap();
+
+    let ista_array = gray_to_array(&ista_restored.to_luma8());
+    let fista_array = gray_to_array(&fista_restored.to_luma8());
+    assert!(is_finite_2d(&ista_array));
+    assert!(is_finite_2d(&fista_array));
+    assert!(ista_array.iter().all(|value| *value >= 0.0));
+    assert!(fista_array.iter().all(|value| *value >= 0.0));
+    assert!(ista_report.iterations >= 1);
+    assert!(fista_report.iterations >= 1);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
