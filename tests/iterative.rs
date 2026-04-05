@@ -1,10 +1,10 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, richardson_lucy,
-    richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller,
-    tikhonov_miller_with, van_cittert, van_cittert_with, Ictm, Landweber, RichardsonLucy,
-    RichardsonLucyTv, TikhonovMiller, VanCittert,
+    bvls, bvls_with, damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, nnls,
+    nnls_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with,
+    tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with, Bvls, Ictm, Landweber,
+    Nnls, RichardsonLucy, RichardsonLucyTv, TikhonovMiller, VanCittert,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -509,6 +509,135 @@ fn tikhonov_miller_and_ictm_default_paths_are_finite() {
     assert!(ictm_report.iterations >= 1);
 }
 
+#[test]
+fn nnls_is_nonnegative_and_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 28.0, 1119).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = nnls_with(
+        &degraded_image,
+        &psf,
+        &Nnls::new()
+            .iterations(24)
+            .step_size(None)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(restored_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(objective_stabilizes(report.objective_history.as_slice()));
+}
+
+#[test]
+fn bvls_respects_custom_bounds_and_objective_stabilizes() {
+    let sharp = checkerboard_2d((62, 58), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 7772).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let lower_bound = 12.0_f32;
+    let upper_bound = 240.0_f32;
+    let (restored, report) = bvls_with(
+        &degraded_image,
+        &psf,
+        &Bvls::new()
+            .iterations(26)
+            .lower_bound(lower_bound)
+            .upper_bound(upper_bound)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let restored_array = gray_to_array(&restored.to_luma8());
+    assert!(restored_array
+        .iter()
+        .all(|value| *value >= lower_bound / 255.0 && *value <= upper_bound / 255.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(objective_stabilizes(report.objective_history.as_slice()));
+}
+
+#[test]
+fn nnls_and_bvls_are_deterministic() {
+    let sharp = checkerboard_2d((46, 50), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 20.0, 90117).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let nnls_config = Nnls::new().iterations(20).collect_history(true);
+    let (nnls_first, nnls_first_report) = nnls_with(&degraded_image, &psf, &nnls_config).unwrap();
+    let (nnls_second, nnls_second_report) = nnls_with(&degraded_image, &psf, &nnls_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&nnls_first.to_luma8()),
+        &gray_to_array(&nnls_second.to_luma8())
+    ));
+    assert_eq!(
+        nnls_first_report.objective_history,
+        nnls_second_report.objective_history
+    );
+    assert_eq!(
+        nnls_first_report.residual_history,
+        nnls_second_report.residual_history
+    );
+
+    let bvls_config = Bvls::new()
+        .iterations(20)
+        .lower_bound(0.0)
+        .upper_bound(255.0)
+        .collect_history(true);
+    let (bvls_first, bvls_first_report) = bvls_with(&degraded_image, &psf, &bvls_config).unwrap();
+    let (bvls_second, bvls_second_report) = bvls_with(&degraded_image, &psf, &bvls_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&bvls_first.to_luma8()),
+        &gray_to_array(&bvls_second.to_luma8())
+    ));
+    assert_eq!(
+        bvls_first_report.objective_history,
+        bvls_second_report.objective_history
+    );
+    assert_eq!(
+        bvls_first_report.residual_history,
+        bvls_second_report.residual_history
+    );
+}
+
+#[test]
+fn nnls_and_bvls_default_paths_are_finite_and_improve_over_blurred_baseline() {
+    let sharp = checkerboard_2d((44, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let (nnls_restored, nnls_report) = nnls(&degraded_image, &psf).unwrap();
+    let (bvls_restored, bvls_report) = bvls(&degraded_image, &psf).unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let nnls_array = gray_to_array(&nnls_restored.to_luma8());
+    let bvls_array = gray_to_array(&bvls_restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let nnls_psnr = psnr(&sharp, &nnls_array).unwrap();
+    let bvls_psnr = psnr(&sharp, &bvls_array).unwrap();
+
+    assert!(nnls_psnr > baseline_psnr);
+    assert!(bvls_psnr > baseline_psnr);
+    assert!(is_finite_2d(&nnls_array));
+    assert!(is_finite_2d(&bvls_array));
+    assert!(nnls_array.iter().all(|value| *value >= 0.0));
+    assert!(bvls_array.iter().all(|value| *value >= 0.0));
+    assert!(nnls_report.iterations >= 1);
+    assert!(bvls_report.iterations >= 1);
+}
+
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
     let (height, width) = input.dim();
     let width_u32 = u32::try_from(width).map_err(|_| deconvolution::Error::DimensionMismatch)?;
@@ -594,4 +723,16 @@ fn total_variation(input: &Array2<f32>) -> f32 {
         }
     }
     tv
+}
+
+fn objective_stabilizes(history: &[f32]) -> bool {
+    if history.len() < 2 {
+        return false;
+    }
+    for pair in history.windows(2) {
+        if pair[1] > pair[0] * 1.001 + 1e-3 {
+            return false;
+        }
+    }
+    history[history.len() - 1] <= history[0] * 1.001 + 1e-3
 }

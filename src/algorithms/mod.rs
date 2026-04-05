@@ -1,9 +1,11 @@
+mod constrained;
 mod inverse;
 mod iterative;
 mod proximal;
 mod rl;
 mod wiener;
 
+pub use constrained::{bvls, bvls_with, nnls, nnls_with, Bvls, Nnls};
 pub use inverse::{
     inverse_filter, inverse_filter_with, naive_inverse_filter, naive_inverse_filter_with,
     regularized_inverse_filter, regularized_inverse_filter_with, tikhonov_inverse_filter,
