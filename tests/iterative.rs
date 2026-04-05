@@ -1,8 +1,9 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    damped_richardson_lucy_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with,
-    richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
+    damped_richardson_lucy_with, landweber, landweber_with, richardson_lucy, richardson_lucy_tv,
+    richardson_lucy_tv_with, richardson_lucy_with, van_cittert, van_cittert_with, Landweber,
+    RichardsonLucy, RichardsonLucyTv, VanCittert,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -298,6 +299,137 @@ fn richardson_lucy_tv_is_nonnegative_finite_and_deterministic() {
         first_report.residual_history,
         second_report.residual_history
     );
+}
+
+#[test]
+fn landweber_residual_decreases_and_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 551).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = landweber_with(
+        &degraded_image,
+        &psf,
+        &Landweber::new()
+            .iterations(28)
+            .step_size(None)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(is_finite_2d(&restored_array));
+    assert!(report.objective_history.len() >= 2);
+    assert!(report.residual_history.len() >= 2);
+    assert!(
+        report.objective_history[report.objective_history.len() - 1] < report.objective_history[0]
+    );
+}
+
+#[test]
+fn van_cittert_residual_decreases_and_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((60, 60), 5, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let (restored, report) = van_cittert_with(
+        &degraded_image,
+        &psf,
+        &VanCittert::new()
+            .iterations(20)
+            .step_size(Some(1.0))
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(is_finite_2d(&restored_array));
+    assert!(report.objective_history.len() >= 2);
+    assert!(report.residual_history.len() >= 2);
+    assert!(
+        report.objective_history[report.objective_history.len() - 1] < report.objective_history[0]
+    );
+}
+
+#[test]
+fn landweber_and_van_cittert_are_deterministic() {
+    let sharp = checkerboard_2d((42, 46), 3, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 22.0, 4567).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let landweber_config = Landweber::new()
+        .iterations(18)
+        .step_size(None)
+        .collect_history(true);
+    let (landweber_first, landweber_first_report) =
+        landweber_with(&degraded_image, &psf, &landweber_config).unwrap();
+    let (landweber_second, landweber_second_report) =
+        landweber_with(&degraded_image, &psf, &landweber_config).unwrap();
+
+    assert!(arrays_equal_2d(
+        &gray_to_array(&landweber_first.to_luma8()),
+        &gray_to_array(&landweber_second.to_luma8())
+    ));
+    assert_eq!(
+        landweber_first_report.objective_history,
+        landweber_second_report.objective_history
+    );
+    assert_eq!(
+        landweber_first_report.residual_history,
+        landweber_second_report.residual_history
+    );
+
+    let van_cittert_config = VanCittert::new()
+        .iterations(18)
+        .step_size(None)
+        .collect_history(true);
+    let (van_first, van_first_report) =
+        van_cittert_with(&degraded_image, &psf, &van_cittert_config).unwrap();
+    let (van_second, van_second_report) =
+        van_cittert_with(&degraded_image, &psf, &van_cittert_config).unwrap();
+
+    assert!(arrays_equal_2d(
+        &gray_to_array(&van_first.to_luma8()),
+        &gray_to_array(&van_second.to_luma8())
+    ));
+    assert_eq!(
+        van_first_report.objective_history,
+        van_second_report.objective_history
+    );
+    assert_eq!(
+        van_first_report.residual_history,
+        van_second_report.residual_history
+    );
+}
+
+#[test]
+fn landweber_and_van_cittert_default_paths_are_finite() {
+    let sharp = checkerboard_2d((40, 40), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.1).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 26.0, 999).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (landweber_restored, landweber_report) = landweber(&degraded_image, &psf).unwrap();
+    let (van_restored, van_report) = van_cittert(&degraded_image, &psf).unwrap();
+
+    assert!(is_finite_2d(&gray_to_array(&landweber_restored.to_luma8())));
+    assert!(is_finite_2d(&gray_to_array(&van_restored.to_luma8())));
+    assert!(landweber_report.iterations >= 1);
+    assert!(van_report.iterations >= 1);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
