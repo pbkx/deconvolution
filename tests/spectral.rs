@@ -8,11 +8,13 @@ use deconvolution::simulate::{
 };
 use deconvolution::{
     inverse_filter, inverse_filter_with, naive_inverse_filter, regularized_inverse_filter_with,
-    tikhonov_inverse_filter_with, truncated_inverse_filter_with, InverseFilter, Padding,
-    RegOperator2D, RegularizedInverseFilter, TikhonovInverseFilter,
+    tikhonov_inverse_filter_with, truncated_inverse_filter_with, wiener, wiener_with,
+    InverseFilter, Padding, RegOperator2D, RegularizedInverseFilter, TikhonovInverseFilter,
+    Transfer2D, Wiener,
 };
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 use ndarray::{array, Array2};
+use num_complex::Complex32;
 
 use common::{arrays_differ_2d, arrays_equal_2d, arrays_equal_3d, is_finite_2d, is_finite_3d};
 
@@ -293,6 +295,115 @@ fn tikhonov_path_is_finite_and_shape_preserving() {
     assert!(output_array.iter().all(|value| value.is_finite()));
 }
 
+#[test]
+fn wiener_known_nsr_improves_psnr_on_noisy_fixture() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.04, 512).unwrap();
+
+    let sharp_img = array_to_gray(&sharp).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+    let inverse_out = inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &InverseFilter::new()
+            .stabilization_floor(1e-3)
+            .padding(Padding::NextFastLen),
+    )
+    .unwrap();
+    let wiener_out = wiener_with(
+        &noisy_img,
+        &psf,
+        &Wiener::new().nsr(0.01).padding(Padding::NextFastLen),
+    )
+    .unwrap();
+
+    let sharp_arr = gray_to_array(&sharp_img);
+    let inverse_arr = gray_to_array(&inverse_out.to_luma8());
+    let wiener_arr = gray_to_array(&wiener_out.to_luma8());
+    let inverse_psnr = psnr(&sharp_arr, &inverse_arr).unwrap();
+    let wiener_psnr = psnr(&sharp_arr, &wiener_arr).unwrap();
+    assert!(wiener_psnr > inverse_psnr);
+}
+
+#[test]
+fn wiener_nsr_zero_matches_inverse_on_noiseless_fixture() {
+    let sharp = checkerboard_2d((48, 48), 3, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let blurred_img = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let inverse_out = inverse_filter_with(
+        &blurred_img,
+        &psf,
+        &InverseFilter::new()
+            .stabilization_floor(1e-3)
+            .padding(Padding::None),
+    )
+    .unwrap();
+    let wiener_out = wiener_with(
+        &blurred_img,
+        &psf,
+        &Wiener::new().nsr(0.0).padding(Padding::None),
+    )
+    .unwrap();
+
+    let inverse_arr = gray_to_array(&inverse_out.to_luma8());
+    let wiener_arr = gray_to_array(&wiener_out.to_luma8());
+    let delta = mse(&inverse_arr, &wiener_arr).unwrap();
+    assert!(delta < 1e-4);
+}
+
+#[test]
+fn wiener_dimensions_and_alpha_are_preserved() {
+    let mut rgba = RgbaImage::new(33, 25);
+    for y in 0..25_u32 {
+        for x in 0..33_u32 {
+            let r = ((7 * x + 5 * y) % 256) as u8;
+            let g = ((11 * x + 3 * y) % 256) as u8;
+            let b = ((13 * x + 17 * y) % 256) as u8;
+            let a = ((19 * x + 23 * y) % 256) as u8;
+            rgba.put_pixel(x, y, Rgba([r, g, b, a]));
+        }
+    }
+
+    let psf = gaussian2d((7, 7), 1.1).unwrap();
+    let restored = wiener(&DynamicImage::ImageRgba8(rgba.clone()), &psf).unwrap();
+    let restored_rgba = restored.to_rgba8();
+    assert_eq!(restored_rgba.dimensions(), rgba.dimensions());
+    for y in 0..25_u32 {
+        for x in 0..33_u32 {
+            assert_eq!(restored_rgba.get_pixel(x, y)[3], rgba.get_pixel(x, y)[3]);
+        }
+    }
+}
+
+#[test]
+fn wiener_autocorrelation_form_is_finite_and_shape_preserving() {
+    let input = checkerboard_2d((40, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&input, &psf).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let dims = blurred.dim();
+    let noise_psd = Transfer2D::new(Array2::from_elem(dims, Complex32::new(0.1, 0.0))).unwrap();
+    let image_psd = Transfer2D::new(Array2::from_elem(dims, Complex32::new(1.0, 0.0))).unwrap();
+    let restored = wiener_with(
+        &noisy_img,
+        &psf,
+        &Wiener::new()
+            .noise_autocorr(noise_psd)
+            .image_autocorr(image_psd)
+            .padding(Padding::None),
+    )
+    .unwrap();
+
+    let restored_arr = gray_to_array(&restored.to_luma8());
+    assert_eq!(restored_arr.dim(), input.dim());
+    assert!(restored_arr.iter().all(|value| value.is_finite()));
+}
+
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
     let (height, width) = input.dim();
     let width_u32 = u32::try_from(width).map_err(|_| deconvolution::Error::DimensionMismatch)?;
@@ -342,4 +453,12 @@ fn mse(lhs: &Array2<f32>, rhs: &Array2<f32>) -> deconvolution::Result<f32> {
         sum += diff * diff;
     }
     Ok(sum / count)
+}
+
+fn psnr(lhs: &Array2<f32>, rhs: &Array2<f32>) -> deconvolution::Result<f32> {
+    let mse_value = mse(lhs, rhs)?;
+    if mse_value <= f32::EPSILON {
+        return Ok(f32::INFINITY);
+    }
+    Ok(10.0 * (1.0 / mse_value).log10())
 }
