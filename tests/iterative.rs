@@ -1,6 +1,8 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
-use deconvolution::{richardson_lucy, richardson_lucy_with, RichardsonLucy};
+use deconvolution::{
+    damped_richardson_lucy_with, richardson_lucy, richardson_lucy_with, RichardsonLucy,
+};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 
@@ -106,6 +108,103 @@ fn richardson_lucy_default_path_runs_and_is_finite() {
     assert!(report.iterations >= 1);
 }
 
+#[test]
+fn damped_weighted_path_respects_mask() {
+    let sharp = checkerboard_2d((48, 48), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 1201).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+    let degraded_luma = degraded_image.to_luma8();
+
+    let mut weights = Array2::ones((48, 48));
+    for y in 16..32 {
+        for x in 16..32 {
+            weights[[y, x]] = 0.0;
+        }
+    }
+
+    let (restored, _) = damped_richardson_lucy_with(
+        &degraded_image,
+        &psf,
+        &RichardsonLucy::new()
+            .iterations(14)
+            .damping(Some(0.15))
+            .weights(weights)
+            .filter_epsilon(1e-3)
+            .collect_history(false),
+    )
+    .unwrap();
+    let restored_luma = restored.to_luma8();
+
+    for y in 16..32 {
+        for x in 16..32 {
+            let x_u32 = x as u32;
+            let y_u32 = y as u32;
+            assert_eq!(
+                restored_luma.get_pixel(x_u32, y_u32)[0],
+                degraded_luma.get_pixel(x_u32, y_u32)[0]
+            );
+        }
+    }
+}
+
+#[test]
+fn damping_reduces_noise_amplification_on_noisy_fixture() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((11, 11), 1.8).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 12.0, 7701).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let config = RichardsonLucy::new()
+        .iterations(36)
+        .filter_epsilon(1e-3)
+        .collect_history(false);
+    let (plain, _) = richardson_lucy_with(&degraded_image, &psf, &config).unwrap();
+    let (damped, _) =
+        damped_richardson_lucy_with(&degraded_image, &psf, &config.clone().damping(Some(0.2)))
+            .unwrap();
+
+    let plain_tv = total_variation(&gray_to_array(&plain.to_luma8()));
+    let damped_tv = total_variation(&gray_to_array(&damped.to_luma8()));
+    assert!(damped_tv < plain_tv);
+}
+
+#[test]
+fn readout_noise_path_is_finite_and_deterministic() {
+    let sharp = checkerboard_2d((44, 40), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 20.0, 411).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let config = RichardsonLucy::new()
+        .iterations(20)
+        .damping(Some(0.12))
+        .readout_noise(0.01)
+        .filter_epsilon(1e-3)
+        .collect_history(true);
+    let (first, first_report) =
+        damped_richardson_lucy_with(&degraded_image, &psf, &config).unwrap();
+    let (second, second_report) =
+        damped_richardson_lucy_with(&degraded_image, &psf, &config).unwrap();
+
+    let first_arr = gray_to_array(&first.to_luma8());
+    let second_arr = gray_to_array(&second.to_luma8());
+    assert!(is_finite_2d(&first_arr));
+    assert!(is_finite_2d(&second_arr));
+    assert!(arrays_equal_2d(&first_arr, &second_arr));
+    assert_eq!(
+        first_report.objective_history,
+        second_report.objective_history
+    );
+    assert_eq!(
+        first_report.residual_history,
+        second_report.residual_history
+    );
+}
+
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
     let (height, width) = input.dim();
     let width_u32 = u32::try_from(width).map_err(|_| deconvolution::Error::DimensionMismatch)?;
@@ -175,4 +274,20 @@ fn arrays_equal_2d(lhs: &Array2<f32>, rhs: &Array2<f32>) -> bool {
 
 fn is_finite_2d(input: &Array2<f32>) -> bool {
     input.iter().all(|value| value.is_finite())
+}
+
+fn total_variation(input: &Array2<f32>) -> f32 {
+    let (height, width) = input.dim();
+    let mut tv = 0.0_f32;
+    for y in 0..height {
+        for x in 0..width {
+            if y + 1 < height {
+                tv += (input[[y + 1, x]] - input[[y, x]]).abs();
+            }
+            if x + 1 < width {
+                tv += (input[[y, x + 1]] - input[[y, x]]).abs();
+            }
+        }
+    }
+    tv
 }

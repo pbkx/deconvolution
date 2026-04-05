@@ -8,7 +8,10 @@ pub use inverse::{
     tikhonov_inverse_filter_with, truncated_inverse_filter, truncated_inverse_filter_with,
     InverseFilter, RegularizedInverseFilter, TikhonovInverseFilter,
 };
-pub use rl::{richardson_lucy, richardson_lucy_with, RichardsonLucy};
+pub use rl::{
+    damped_richardson_lucy, damped_richardson_lucy_with, richardson_lucy, richardson_lucy_with,
+    RichardsonLucy,
+};
 pub use wiener::{
     unsupervised_wiener, unsupervised_wiener_with, wiener, wiener_with, UnsupervisedWiener, Wiener,
 };

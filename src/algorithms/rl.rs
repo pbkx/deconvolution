@@ -17,6 +17,9 @@ pub struct RichardsonLucy {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
     filter_epsilon: f32,
+    damping: Option<f32>,
+    weights: Option<Array2<f32>>,
+    readout_noise: f32,
     positivity: bool,
     channel_mode: ChannelMode,
     range_policy: RangePolicy,
@@ -29,6 +32,9 @@ impl Default for RichardsonLucy {
             iterations: 30,
             relative_update_tolerance: None,
             filter_epsilon: 1e-6,
+            damping: None,
+            weights: None,
+            readout_noise: 0.0,
             positivity: true,
             channel_mode: ChannelMode::Independent,
             range_policy: RangePolicy::PreserveInput,
@@ -54,6 +60,26 @@ impl RichardsonLucy {
 
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
+        self
+    }
+
+    pub fn damping(mut self, value: Option<f32>) -> Self {
+        self.damping = value;
+        self
+    }
+
+    pub fn weights(mut self, value: Array2<f32>) -> Self {
+        self.weights = Some(value);
+        self
+    }
+
+    pub fn clear_weights(mut self) -> Self {
+        self.weights = None;
+        self
+    }
+
+    pub fn readout_noise(mut self, value: f32) -> Self {
+        self.readout_noise = value;
         self
     }
 
@@ -90,8 +116,33 @@ pub fn richardson_lucy_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(DynamicImage, SolveReport)> {
+    run_richardson_lucy(image, psf, config, false)
+}
+
+pub fn damped_richardson_lucy(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+) -> Result<(DynamicImage, SolveReport)> {
+    damped_richardson_lucy_with(image, psf, &RichardsonLucy::new())
+}
+
+pub fn damped_richardson_lucy_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &RichardsonLucy,
+) -> Result<(DynamicImage, SolveReport)> {
+    run_richardson_lucy(image, psf, config, true)
+}
+
+fn run_richardson_lucy(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &RichardsonLucy,
+    force_damping: bool,
+) -> Result<(DynamicImage, SolveReport)> {
     validate(psf)?;
-    validate_config(config)?;
+    let effective_config = resolve_effective_config(config, force_damping);
+    validate_config(&effective_config)?;
 
     let normalized_psf = psf.normalized()?;
     let op = Convolution2D::new(&normalized_psf)?;
@@ -103,7 +154,8 @@ pub fn richardson_lucy_with(
         return Err(Error::EmptyImage);
     }
 
-    let (restored_color, report) = restore_color(planar.color(), planar.alpha(), &op, config)?;
+    let (restored_color, report) =
+        restore_color(planar.color(), planar.alpha(), &op, &effective_config)?;
     let restored = rebuild_image(image, &restored_color)?;
     Ok((restored, report))
 }
@@ -277,6 +329,7 @@ fn restore_channel(
     if config.positivity {
         estimate = project_nonnegative_2d(&estimate)?;
     }
+    let weights = resolve_weights(config.weights.as_ref(), input.dim())?;
 
     let mut diagnostics = Diagnostics::new();
     let criteria = StopCriteria {
@@ -290,14 +343,18 @@ fn restore_channel(
 
     for iteration in 0..config.iterations {
         let blurred = operator.apply(&estimate)?;
-        let ratio = multiplicative_ratio(input, &blurred, config.filter_epsilon)?;
-        let correction = operator.adjoint(&ratio)?;
+        let ratio =
+            multiplicative_ratio(input, &blurred, config.filter_epsilon, config.readout_noise)?;
+        let mut correction = operator.adjoint(&ratio)?;
+        correction = apply_update_weights(&correction, weights)?;
+        correction = apply_damping(&correction, config.damping)?;
         let mut next = elementwise_mul(&estimate, &correction)?;
         if config.positivity {
             next = project_nonnegative_2d(&next)?;
         }
 
-        let objective = poisson_objective(input, &blurred, config.filter_epsilon)?;
+        let objective =
+            poisson_objective(input, &blurred, config.filter_epsilon, config.readout_noise)?;
         let residual = relative_update_norm(&next, &estimate)?;
         diagnostics.record(objective, residual)?;
 
@@ -328,6 +385,7 @@ fn multiplicative_ratio(
     observed: &Array2<f32>,
     predicted: &Array2<f32>,
     epsilon: f32,
+    readout_noise: f32,
 ) -> Result<Array2<f32>> {
     if observed.dim() != predicted.dim() {
         return Err(Error::DimensionMismatch);
@@ -336,7 +394,7 @@ fn multiplicative_ratio(
     let mut ratio = Array2::zeros((height, width));
     for y in 0..height {
         for x in 0..width {
-            let pred = predicted[[y, x]].max(epsilon);
+            let pred = (predicted[[y, x]] + readout_noise).max(epsilon);
             let value = observed[[y, x]] / pred;
             if !value.is_finite() {
                 return Err(Error::NonFiniteInput);
@@ -345,6 +403,55 @@ fn multiplicative_ratio(
         }
     }
     Ok(ratio)
+}
+
+fn apply_update_weights(
+    correction: &Array2<f32>,
+    weights: Option<&Array2<f32>>,
+) -> Result<Array2<f32>> {
+    let Some(weights) = weights else {
+        return Ok(correction.to_owned());
+    };
+
+    if correction.dim() != weights.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let (height, width) = correction.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let w = weights[[y, x]];
+            let value = 1.0 + w * (correction[[y, x]] - 1.0);
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
+
+    Ok(output)
+}
+
+fn apply_damping(correction: &Array2<f32>, damping: Option<f32>) -> Result<Array2<f32>> {
+    let Some(damping) = damping else {
+        return Ok(correction.to_owned());
+    };
+
+    let lower = 1.0 / (1.0 + damping);
+    let upper = 1.0 + damping;
+    let (height, width) = correction.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let value = correction[[y, x]].clamp(lower, upper);
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
+    Ok(output)
 }
 
 fn elementwise_mul(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<Array2<f32>> {
@@ -385,14 +492,19 @@ fn relative_update_norm(next: &Array2<f32>, prev: &Array2<f32>) -> Result<f32> {
     Ok(residual)
 }
 
-fn poisson_objective(observed: &Array2<f32>, predicted: &Array2<f32>, epsilon: f32) -> Result<f32> {
+fn poisson_objective(
+    observed: &Array2<f32>,
+    predicted: &Array2<f32>,
+    epsilon: f32,
+    readout_noise: f32,
+) -> Result<f32> {
     if observed.dim() != predicted.dim() {
         return Err(Error::DimensionMismatch);
     }
 
     let mut objective = 0.0_f32;
     for ((y, x), value) in observed.indexed_iter() {
-        let pred = predicted[[y, x]].max(epsilon);
+        let pred = (predicted[[y, x]] + readout_noise).max(epsilon);
         let term = pred - *value * pred.ln();
         if !term.is_finite() {
             return Err(Error::NonFiniteInput);
@@ -616,6 +728,35 @@ fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: 
     Ok(())
 }
 
+fn resolve_effective_config(config: &RichardsonLucy, force_damping: bool) -> RichardsonLucy {
+    let mut effective = config.clone();
+    if force_damping && effective.damping.is_none() {
+        effective.damping = Some(0.1);
+    }
+    effective
+}
+
+fn resolve_weights(
+    weights: Option<&Array2<f32>>,
+    dims: (usize, usize),
+) -> Result<Option<&Array2<f32>>> {
+    let Some(weights) = weights else {
+        return Ok(None);
+    };
+
+    if weights.dim() != dims {
+        return Err(Error::DimensionMismatch);
+    }
+    if weights
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0 || *value > 1.0)
+    {
+        return Err(Error::InvalidParameter);
+    }
+
+    Ok(Some(weights))
+}
+
 fn validate_config(config: &RichardsonLucy) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
@@ -627,6 +768,22 @@ fn validate_config(config: &RichardsonLucy) -> Result<()> {
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);
+    }
+    if let Some(damping) = config.damping {
+        if !damping.is_finite() || damping < 0.0 {
+            return Err(Error::InvalidParameter);
+        }
+    }
+    if !config.readout_noise.is_finite() || config.readout_noise < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if let Some(weights) = config.weights.as_ref() {
+        if weights
+            .iter()
+            .any(|value| !value.is_finite() || *value < 0.0 || *value > 1.0)
+        {
+            return Err(Error::InvalidParameter);
+        }
     }
     Ok(())
 }
