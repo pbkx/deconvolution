@@ -7,6 +7,7 @@ use crate::core::fft::{
 use crate::core::operator::{LinearOperator2D, LinearOperator3D};
 use crate::core::plan_cache::PlanCache;
 use crate::core::validate::{finite_real_2d, finite_real_3d};
+use crate::otf::psf2otf;
 use crate::otf::{Transfer2D, Transfer3D};
 use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Error, Result};
@@ -77,6 +78,39 @@ impl RegOperator3D<'_> {
             Self::Gradient => gradient_adjoint_3d(input),
             Self::CustomKernel(kernel) => Convolution3D::new(kernel)?.adjoint(input),
             Self::CustomTransfer(transfer) => transfer_apply_3d(input, transfer, true),
+        }
+    }
+}
+
+pub(crate) fn spectral_response_2d(
+    operator: RegOperator2D<'_>,
+    dims: (usize, usize),
+) -> Result<Array2<num_complex::Complex32>> {
+    let (height, width) = dims;
+    if height == 0 || width == 0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    match operator {
+        RegOperator2D::CustomTransfer(transfer) => {
+            if transfer.dims() != dims {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok(transfer.as_array().as_standard_layout().to_owned())
+        }
+        RegOperator2D::CustomKernel(kernel) => {
+            let (kh, kw) = kernel.dims();
+            if kh > height || kw > width {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok(psf2otf(kernel, dims)?.into_inner())
+        }
+        _ => {
+            let mut impulse = Array2::zeros((height, width));
+            impulse[[0, 0]] = 1.0;
+            let response = operator.apply(&impulse)?;
+            let mut cache = PlanCache::new();
+            fft2_forward_real(&response, &mut cache)
         }
     }
 }

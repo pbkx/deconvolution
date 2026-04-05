@@ -7,11 +7,12 @@ use deconvolution::simulate::{
     degrade, gaussian_blob_2d, phantom_3d, rgb_edges_2d,
 };
 use deconvolution::{
-    inverse_filter, inverse_filter_with, naive_inverse_filter, truncated_inverse_filter_with,
-    InverseFilter, Padding,
+    inverse_filter, inverse_filter_with, naive_inverse_filter, regularized_inverse_filter_with,
+    tikhonov_inverse_filter_with, truncated_inverse_filter_with, InverseFilter, Padding,
+    RegOperator2D, RegularizedInverseFilter, TikhonovInverseFilter,
 };
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
-use ndarray::Array2;
+use ndarray::{array, Array2};
 
 use common::{arrays_differ_2d, arrays_equal_2d, arrays_equal_3d, is_finite_2d, is_finite_3d};
 
@@ -186,6 +187,110 @@ fn dimensions_and_alpha_are_preserved() {
             assert_eq!(restored_rgba.get_pixel(x, y)[3], rgba.get_pixel(x, y)[3]);
         }
     }
+}
+
+#[test]
+fn regularized_inverse_improves_over_plain_inverse_on_noisy_fixture() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.8).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.03, 404).unwrap();
+
+    let sharp_img = array_to_gray(&sharp).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+
+    let plain = inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &InverseFilter::new()
+            .stabilization_floor(1e-3)
+            .padding(Padding::NextFastLen),
+    )
+    .unwrap();
+    let regularized = regularized_inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &RegularizedInverseFilter::new()
+            .lambda(0.02)
+            .stabilization_floor(1e-3)
+            .padding(Padding::NextFastLen),
+    )
+    .unwrap();
+
+    let sharp_array = gray_to_array(&sharp_img);
+    let plain_array = gray_to_array(&plain.to_luma8());
+    let regularized_array = gray_to_array(&regularized.to_luma8());
+    let plain_mse = mse(&sharp_array, &plain_array).unwrap();
+    let regularized_mse = mse(&sharp_array, &regularized_array).unwrap();
+
+    assert!(regularized_mse < plain_mse);
+}
+
+#[test]
+fn custom_regularizer_paths_are_shape_preserving_and_finite() {
+    let input = checkerboard_2d((48, 40), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&input, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.02, 111).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+
+    let reg_kernel = deconvolution::Kernel2D::new(array![
+        [0.0_f32, -1.0_f32, 0.0_f32],
+        [-1.0_f32, 4.0_f32, -1.0_f32],
+        [0.0_f32, -1.0_f32, 0.0_f32]
+    ])
+    .unwrap();
+
+    let out_kernel = regularized_inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &RegularizedInverseFilter::new()
+            .lambda(0.015)
+            .regularizer(RegOperator2D::CustomKernel(&reg_kernel))
+            .padding(Padding::None),
+    )
+    .unwrap();
+
+    let transfer = psf2otf(&reg_kernel, noisy.dim()).unwrap();
+    let out_transfer = regularized_inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &RegularizedInverseFilter::new()
+            .lambda(0.015)
+            .regularizer(RegOperator2D::CustomTransfer(&transfer))
+            .padding(Padding::None),
+    )
+    .unwrap();
+
+    let kernel_arr = gray_to_array(&out_kernel.to_luma8());
+    let transfer_arr = gray_to_array(&out_transfer.to_luma8());
+    assert_eq!(kernel_arr.dim(), input.dim());
+    assert_eq!(transfer_arr.dim(), input.dim());
+    assert!(kernel_arr.iter().all(|value| value.is_finite()));
+    assert!(transfer_arr.iter().all(|value| value.is_finite()));
+}
+
+#[test]
+fn tikhonov_path_is_finite_and_shape_preserving() {
+    let input = checkerboard_2d((40, 52), 5, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.1).unwrap();
+    let blurred = blur(&input, &psf).unwrap();
+    let noisy = add_gaussian_noise(&blurred, 0.02, 73).unwrap();
+    let noisy_img = DynamicImage::ImageLuma8(array_to_gray(&noisy).unwrap());
+
+    let output = tikhonov_inverse_filter_with(
+        &noisy_img,
+        &psf,
+        &TikhonovInverseFilter::new()
+            .lambda(0.01)
+            .stabilization_floor(1e-3)
+            .padding(Padding::NextFastLen),
+    )
+    .unwrap();
+
+    let output_array = gray_to_array(&output.to_luma8());
+    assert_eq!(output_array.dim(), input.dim());
+    assert!(output_array.iter().all(|value| value.is_finite()));
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {

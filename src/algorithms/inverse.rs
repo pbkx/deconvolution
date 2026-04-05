@@ -6,11 +6,12 @@ use crate::core::color::sample_from_f32;
 use crate::core::convert::PlanarImage;
 use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
 use crate::core::plan_cache::PlanCache;
+use crate::core::regularizer::spectral_response_2d;
 use crate::core::util::next_fast_len;
 use crate::otf::{psf2otf, Transfer2D};
 use crate::preprocess::normalize_range;
 use crate::psf::{validate, Kernel2D};
-use crate::{Error, Padding, RangePolicy, Result};
+use crate::{Error, Padding, RangePolicy, RegOperator2D, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InverseFilter {
@@ -43,6 +44,103 @@ impl InverseFilter {
 
     pub fn truncation_cutoff(mut self, value: f32) -> Self {
         self.truncation_cutoff = value;
+        self
+    }
+
+    pub fn padding(mut self, value: Padding) -> Self {
+        self.padding = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RegularizedInverseFilter<'a> {
+    lambda: f32,
+    stabilization_floor: f32,
+    padding: Padding,
+    range_policy: RangePolicy,
+    regularizer: Option<RegOperator2D<'a>>,
+}
+
+impl<'a> Default for RegularizedInverseFilter<'a> {
+    fn default() -> Self {
+        Self {
+            lambda: 1e-2,
+            stabilization_floor: 1e-3,
+            padding: Padding::None,
+            range_policy: RangePolicy::PreserveInput,
+            regularizer: None,
+        }
+    }
+}
+
+impl<'a> RegularizedInverseFilter<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn lambda(mut self, value: f32) -> Self {
+        self.lambda = value;
+        self
+    }
+
+    pub fn stabilization_floor(mut self, value: f32) -> Self {
+        self.stabilization_floor = value;
+        self
+    }
+
+    pub fn padding(mut self, value: Padding) -> Self {
+        self.padding = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn regularizer(mut self, value: RegOperator2D<'a>) -> Self {
+        self.regularizer = Some(value);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TikhonovInverseFilter {
+    lambda: f32,
+    stabilization_floor: f32,
+    padding: Padding,
+    range_policy: RangePolicy,
+}
+
+impl Default for TikhonovInverseFilter {
+    fn default() -> Self {
+        Self {
+            lambda: 1e-2,
+            stabilization_floor: 1e-3,
+            padding: Padding::None,
+            range_policy: RangePolicy::PreserveInput,
+        }
+    }
+}
+
+impl TikhonovInverseFilter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn lambda(mut self, value: f32) -> Self {
+        self.lambda = value;
+        self
+    }
+
+    pub fn stabilization_floor(mut self, value: f32) -> Self {
+        self.stabilization_floor = value;
         self
     }
 
@@ -93,6 +191,30 @@ pub fn truncated_inverse_filter_with(
     restore(image, psf, config, Mode::Truncated)
 }
 
+pub fn regularized_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
+    regularized_inverse_filter_with(image, psf, &RegularizedInverseFilter::new())
+}
+
+pub fn regularized_inverse_filter_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &RegularizedInverseFilter<'_>,
+) -> Result<DynamicImage> {
+    restore_regularized(image, psf, config)
+}
+
+pub fn tikhonov_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
+    tikhonov_inverse_filter_with(image, psf, &TikhonovInverseFilter::new())
+}
+
+pub fn tikhonov_inverse_filter_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &TikhonovInverseFilter,
+) -> Result<DynamicImage> {
+    restore_tikhonov(image, psf, config)
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Naive,
@@ -121,6 +243,43 @@ fn restore(
     rebuild_image(image, &restored_color)
 }
 
+fn restore_regularized(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &RegularizedInverseFilter<'_>,
+) -> Result<DynamicImage> {
+    validate(psf)?;
+    validate_regularized_config(config)?;
+
+    let planar = PlanarImage::from_dynamic(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let restored_color = restore_color_regularized(planar.color(), psf, config)?;
+    rebuild_image(image, &restored_color)
+}
+
+fn restore_tikhonov(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &TikhonovInverseFilter,
+) -> Result<DynamicImage> {
+    validate_tikhonov_config(config)?;
+
+    let regularized = RegularizedInverseFilter::new()
+        .lambda(config.lambda)
+        .stabilization_floor(config.stabilization_floor)
+        .padding(config.padding)
+        .range_policy(config.range_policy)
+        .regularizer(RegOperator2D::Identity);
+
+    restore_regularized(image, psf, &regularized)
+}
+
 fn restore_color(
     color: &Array3<f32>,
     psf: &Kernel2D,
@@ -145,6 +304,48 @@ fn restore_color(
     for channel_idx in 0..channels {
         let channel = color.index_axis(Axis(0), channel_idx).to_owned();
         let restored = restore_channel(&channel, &otf, config, mode)?;
+        for y in 0..height {
+            for x in 0..width {
+                output[[channel_idx, y, x]] = restored[[y, x]];
+            }
+        }
+    }
+
+    Ok(output)
+}
+
+fn restore_color_regularized(
+    color: &Array3<f32>,
+    psf: &Kernel2D,
+    config: &RegularizedInverseFilter<'_>,
+) -> Result<Array3<f32>> {
+    let shape = color.shape();
+    if shape.len() != 3 {
+        return Err(Error::DimensionMismatch);
+    }
+    let channels = shape[0];
+    let height = shape[1];
+    let width = shape[2];
+    if channels == 0 || height == 0 || width == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let fft_dims = resolve_fft_dims((height, width), psf.dims(), config.padding)?;
+    let otf = psf2otf(psf, fft_dims)?;
+    let regularizer = config.regularizer.unwrap_or(RegOperator2D::Laplacian);
+    let regularizer_transfer = spectral_response_2d(regularizer, fft_dims)?;
+
+    let mut output = Array3::zeros((channels, height, width));
+    for channel_idx in 0..channels {
+        let channel = color.index_axis(Axis(0), channel_idx).to_owned();
+        let restored = restore_channel_regularized(
+            &channel,
+            otf.as_array(),
+            &regularizer_transfer,
+            config.lambda,
+            config.stabilization_floor,
+            config.range_policy,
+        )?;
         for y in 0..height {
             for x in 0..width {
                 output[[channel_idx, y, x]] = restored[[y, x]];
@@ -183,6 +384,44 @@ fn restore_channel(
     normalize_range(&cropped, config.range_policy)
 }
 
+fn restore_channel_regularized(
+    input: &Array2<f32>,
+    blur_transfer: &Array2<Complex32>,
+    regularizer_transfer: &Array2<Complex32>,
+    lambda: f32,
+    stabilization_floor: f32,
+    range_policy: RangePolicy,
+) -> Result<Array2<f32>> {
+    if input.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if input.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let (height, width) = input.dim();
+    let padded = pad_to_dims(input, blur_transfer.dim())?;
+    let mut cache = PlanCache::new();
+    let mut spectrum = fft2_forward_real(&padded, &mut cache)?;
+    apply_regularized_inverse(
+        &mut spectrum,
+        blur_transfer,
+        regularizer_transfer,
+        lambda,
+        stabilization_floor,
+    )?;
+    let restored = fft2_inverse_complex(&spectrum, &mut cache)?;
+
+    let mut cropped = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            cropped[[y, x]] = restored[[y, x]];
+        }
+    }
+
+    normalize_range(&cropped, range_policy)
+}
+
 fn invert_spectrum(
     spectrum: &mut Array2<Complex32>,
     transfer: &Array2<Complex32>,
@@ -206,6 +445,42 @@ fn invert_spectrum(
             )?,
         };
 
+        if !restored.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        *value = restored;
+    }
+
+    Ok(())
+}
+
+fn apply_regularized_inverse(
+    spectrum: &mut Array2<Complex32>,
+    blur_transfer: &Array2<Complex32>,
+    regularizer_transfer: &Array2<Complex32>,
+    lambda: f32,
+    stabilization_floor: f32,
+) -> Result<()> {
+    if spectrum.dim() != blur_transfer.dim() || spectrum.dim() != regularizer_transfer.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    if !lambda.is_finite() || lambda < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !stabilization_floor.is_finite() || stabilization_floor <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let denom_floor = stabilization_floor * stabilization_floor;
+    for ((y, x), value) in spectrum.indexed_iter_mut() {
+        let h = blur_transfer[[y, x]];
+        let l = regularizer_transfer[[y, x]];
+        let denom = (h.norm_sqr() + lambda * l.norm_sqr()).max(denom_floor);
+        if !denom.is_finite() || denom <= 0.0 {
+            return Err(Error::InvalidParameter);
+        }
+
+        let restored = h.conj() * *value / denom;
         if !restored.is_finite() {
             return Err(Error::NonFiniteInput);
         }
@@ -441,6 +716,32 @@ fn validate_config(config: &InverseFilter) -> Result<()> {
         return Err(Error::InvalidParameter);
     }
     if !config.truncation_cutoff.is_finite() || config.truncation_cutoff < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if let Padding::Explicit3(_, _, _) = config.padding {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn validate_regularized_config(config: &RegularizedInverseFilter<'_>) -> Result<()> {
+    if !config.lambda.is_finite() || config.lambda < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !config.stabilization_floor.is_finite() || config.stabilization_floor <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if let Padding::Explicit3(_, _, _) = config.padding {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn validate_tikhonov_config(config: &TikhonovInverseFilter) -> Result<()> {
+    if !config.lambda.is_finite() || config.lambda < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !config.stabilization_floor.is_finite() || config.stabilization_floor <= 0.0 {
         return Err(Error::InvalidParameter);
     }
     if let Padding::Explicit3(_, _, _) = config.padding {
