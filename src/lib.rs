@@ -3,6 +3,7 @@
 mod algorithms;
 mod core;
 
+pub mod blind;
 pub mod error;
 pub mod otf;
 pub mod prelude;
@@ -11,6 +12,7 @@ pub mod psf;
 pub mod simulate;
 pub mod traits;
 
+pub use crate::blind::{BlindOutput, BlindReport, ParametricPsf};
 pub use crate::core::diagnostics::SolveReport;
 pub use crate::core::regularizer::{RegOperator2D, RegOperator3D};
 pub use crate::core::stopping::StopReason;

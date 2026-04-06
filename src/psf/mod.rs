@@ -1,4 +1,5 @@
 mod basic;
+mod constraints;
 pub mod init;
 mod kernel;
 mod support;
@@ -7,6 +8,7 @@ pub use basic::{
     box2d, box3d, defocus, delta2d, delta3d, disk, gaussian2d, gaussian3d, motion_linear,
     oriented_gaussian, pillbox,
 };
+pub use constraints::{apply_constraint, apply_constraints, PsfConstraint};
 pub use init::{from_support, gaussian_guess, motion_guess, uniform};
 pub use kernel::{Blur2D, Blur3D, Kernel2D, Kernel3D};
 pub use support::{

@@ -1,6 +1,7 @@
+pub use crate::blind::{BlindOutput, BlindReport, ParametricPsf};
 pub use crate::error::{Error, Result};
 pub use crate::otf::{Transfer2D, Transfer3D};
-pub use crate::psf::{Blur2D, Blur3D, Kernel2D, Kernel3D};
+pub use crate::psf::{Blur2D, Blur3D, Kernel2D, Kernel3D, PsfConstraint};
 pub use crate::traits::{Boundary, ChannelMode, Padding, RangePolicy};
 pub use crate::{
     bvls, bvls_with, damped_richardson_lucy, damped_richardson_lucy_with, fista, fista_with, ictm,
