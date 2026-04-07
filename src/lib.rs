@@ -12,7 +12,7 @@ pub mod psf;
 pub mod simulate;
 pub mod traits;
 
-pub use crate::blind::{BlindOutput, BlindReport, ParametricPsf};
+pub use crate::blind::{BlindOutput, BlindReport, BlindRichardsonLucy, ParametricPsf};
 pub use crate::core::diagnostics::SolveReport;
 pub use crate::core::regularizer::{RegOperator2D, RegOperator3D};
 pub use crate::core::stopping::StopReason;
