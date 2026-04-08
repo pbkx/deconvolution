@@ -1,6 +1,7 @@
 use deconvolution::blind::{
-    richardson_lucy, richardson_lucy_with, BlindOutput, BlindReport, BlindRichardsonLucy,
-    ParametricPsf,
+    maximum_likelihood, maximum_likelihood_with, parametric, parametric_with, richardson_lucy,
+    richardson_lucy_with, BlindMaximumLikelihood, BlindOutput, BlindParametric, BlindReport,
+    BlindRichardsonLucy, ParametricPsf,
 };
 use deconvolution::psf::{
     apply_constraint, apply_constraints, motion_linear, uniform, PsfConstraint,
@@ -285,6 +286,160 @@ fn blind_richardson_lucy_is_deterministic() {
         second.report.psf_update_history
     );
     assert_eq!(default_path.psf.dims(), initial_psf.dims());
+}
+
+#[test]
+fn blind_maximum_likelihood_is_finite_and_restorative() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let true_psf = motion_linear(11.0, 30.0).unwrap();
+    let blurred = blur(&sharp, &true_psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 48.0, 9303).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+    let initial_psf = uniform(true_psf.dims()).unwrap();
+
+    let output = maximum_likelihood_with(
+        &degraded_image,
+        &initial_psf,
+        &BlindMaximumLikelihood::new()
+            .iterations(24)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline = gray_to_array(&degraded_image.to_luma8());
+    let restored = gray_to_array(&output.image.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline).unwrap();
+    let restored_psnr = psnr(&sharp, &restored).unwrap();
+
+    assert!(restored_psnr > baseline_psnr);
+    assert!(output.psf.as_array().iter().all(|value| value.is_finite()));
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+    assert!(output.report.iterations >= 1);
+}
+
+#[test]
+fn blind_maximum_likelihood_is_deterministic() {
+    let sharp = checkerboard_2d((56, 56), 4, 0.0, 1.0).unwrap();
+    let true_psf = motion_linear(9.0, 15.0).unwrap();
+    let blurred = blur(&sharp, &true_psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 44.0, 1113).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+    let initial_psf = uniform(true_psf.dims()).unwrap();
+    let config = BlindMaximumLikelihood::new()
+        .iterations(20)
+        .filter_epsilon(1e-3)
+        .collect_history(true);
+
+    let first = maximum_likelihood_with(&degraded_image, &initial_psf, &config).unwrap();
+    let second = maximum_likelihood_with(&degraded_image, &initial_psf, &config).unwrap();
+    let default_path = maximum_likelihood(&degraded_image, &initial_psf).unwrap();
+
+    assert!(arrays_equal_2d_bits(
+        &gray_to_array(&first.image.to_luma8()),
+        &gray_to_array(&second.image.to_luma8())
+    ));
+    assert!(arrays_equal_2d_bits(
+        first.psf.as_array(),
+        second.psf.as_array()
+    ));
+    assert_eq!(
+        first.report.objective_history,
+        second.report.objective_history
+    );
+    assert_eq!(
+        first.report.image_update_history,
+        second.report.image_update_history
+    );
+    assert_eq!(
+        first.report.psf_update_history,
+        second.report.psf_update_history
+    );
+    assert_eq!(default_path.psf.dims(), initial_psf.dims());
+}
+
+#[test]
+fn blind_parametric_motion_estimate_improves_over_initial_guess() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let true_psf = motion_linear(13.0, 38.0).unwrap();
+    let blurred = blur(&sharp, &true_psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 72.0, 707).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let initial_model = ParametricPsf::MotionLinear {
+        length: 5.0,
+        angle_deg: -25.0,
+    };
+    let initial_psf = initial_model.realize(true_psf.dims()).unwrap();
+    let initial_ncc =
+        normalized_cross_correlation(true_psf.as_array(), initial_psf.as_array()).unwrap();
+
+    let output = parametric_with(
+        &degraded_image,
+        initial_model,
+        true_psf.dims(),
+        &BlindParametric::new()
+            .iterations(12)
+            .image_iterations(12)
+            .initial_step_scale(0.45)
+            .min_step_scale(0.02)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+    let final_ncc =
+        normalized_cross_correlation(true_psf.as_array(), output.psf.as_array()).unwrap();
+
+    assert!(final_ncc > initial_ncc);
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+    assert!(output.psf.as_array().iter().all(|value| *value >= 0.0));
+
+    let default_path = parametric(&degraded_image, initial_model, true_psf.dims()).unwrap();
+    assert_eq!(default_path.psf.dims(), true_psf.dims());
+}
+
+#[test]
+fn blind_parametric_is_deterministic() {
+    let sharp = checkerboard_2d((60, 60), 4, 0.0, 1.0).unwrap();
+    let true_psf = motion_linear(11.0, 32.0).unwrap();
+    let blurred = blur(&sharp, &true_psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 60.0, 812).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+    let initial_model = ParametricPsf::MotionLinear {
+        length: 6.0,
+        angle_deg: -20.0,
+    };
+    let config = BlindParametric::new()
+        .iterations(10)
+        .image_iterations(10)
+        .initial_step_scale(0.4)
+        .min_step_scale(0.02)
+        .filter_epsilon(1e-3)
+        .collect_history(true);
+
+    let first = parametric_with(&degraded_image, initial_model, true_psf.dims(), &config).unwrap();
+    let second = parametric_with(&degraded_image, initial_model, true_psf.dims(), &config).unwrap();
+
+    assert!(arrays_equal_2d_bits(
+        &gray_to_array(&first.image.to_luma8()),
+        &gray_to_array(&second.image.to_luma8())
+    ));
+    assert!(arrays_equal_2d_bits(
+        first.psf.as_array(),
+        second.psf.as_array()
+    ));
+    assert_eq!(
+        first.report.objective_history,
+        second.report.objective_history
+    );
+    assert_eq!(
+        first.report.image_update_history,
+        second.report.image_update_history
+    );
+    assert_eq!(
+        first.report.psf_update_history,
+        second.report.psf_update_history
+    );
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
