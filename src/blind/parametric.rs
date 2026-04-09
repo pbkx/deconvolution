@@ -413,7 +413,7 @@ fn with_parameter(model: ParametricPsf, index: usize, value: f32) -> Result<Para
             }),
             _ => Err(Error::InvalidParameter),
         },
-        ParametricPsf::Defocus { radius } => match index {
+        ParametricPsf::Defocus { .. } => match index {
             0 => Ok(ParametricPsf::Defocus { radius: value }),
             _ => Err(Error::InvalidParameter),
         },
