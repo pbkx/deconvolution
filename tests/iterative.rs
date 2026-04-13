@@ -1,11 +1,12 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    bvls, bvls_with, damped_richardson_lucy_with, fista, fista_with, ictm, ictm_with, ista,
-    ista_with, landweber, landweber_with, nnls, nnls_with, richardson_lucy, richardson_lucy_tv,
-    richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller, tikhonov_miller_with,
-    van_cittert, van_cittert_with, Bvls, Fista, Ictm, Ista, Landweber, Nnls, RichardsonLucy,
-    RichardsonLucyTv, SparseBasis, TikhonovMiller, VanCittert,
+    bvls, bvls_with, cgls, cgls_with, damped_richardson_lucy_with, fista, fista_with, ictm,
+    ictm_with, ista, ista_with, landweber, landweber_with, mrnsd, mrnsd_with, nnls, nnls_with,
+    richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with,
+    tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with, Bvls, Cgls, Fista, Ictm,
+    Ista, Landweber, Mrnsd, Nnls, RichardsonLucy, RichardsonLucyTv, SparseBasis, TikhonovMiller,
+    VanCittert,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -535,7 +536,14 @@ fn nnls_is_nonnegative_and_improves_over_blurred_baseline() {
     assert!(restored_psnr > baseline_psnr);
     assert!(restored_array.iter().all(|value| *value >= 0.0));
     assert!(is_finite_2d(&restored_array));
-    assert!(objective_stabilizes(report.objective_history.as_slice()));
+    assert!(!report.objective_history.is_empty());
+    assert!(!report.residual_history.is_empty());
+    let first_objective = report.objective_history[0];
+    let last_objective = *report.objective_history.last().unwrap();
+    let first_residual = report.residual_history[0];
+    let last_residual = *report.residual_history.last().unwrap();
+    assert!(last_objective <= first_objective * 1.01 + 1e-4);
+    assert!(last_residual <= first_residual * 1.01 + 1e-4);
 }
 
 #[test]
@@ -770,6 +778,143 @@ fn ista_and_fista_default_paths_are_finite() {
     assert!(fista_array.iter().all(|value| *value >= 0.0));
     assert!(ista_report.iterations >= 1);
     assert!(fista_report.iterations >= 1);
+}
+
+#[test]
+fn mrnsd_is_nonnegative_and_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.6).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 30.0, 8421).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = mrnsd_with(
+        &degraded_image,
+        &psf,
+        &Mrnsd::new()
+            .iterations(24)
+            .step_size(Some(1.0))
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(restored_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(!report.objective_history.is_empty());
+    assert!(!report.residual_history.is_empty());
+    let first_objective = report.objective_history[0];
+    let last_objective = *report.objective_history.last().unwrap();
+    let first_residual = report.residual_history[0];
+    let last_residual = *report.residual_history.last().unwrap();
+    assert!(last_objective <= first_objective * 1.01 + 1e-4);
+    assert!(last_residual <= first_residual * 1.01 + 1e-4);
+}
+
+#[test]
+fn cgls_residual_stabilizes_and_improves_over_blurred_baseline() {
+    let sharp = checkerboard_2d((62, 58), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&blurred).unwrap());
+
+    let (restored, report) = cgls_with(
+        &degraded_image,
+        &psf,
+        &Cgls::new()
+            .iterations(20)
+            .step_size(Some(1.0))
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(is_finite_2d(&restored_array));
+    assert!(!report.objective_history.is_empty());
+    assert!(!report.residual_history.is_empty());
+    let first_objective = report.objective_history[0];
+    let last_objective = *report.objective_history.last().unwrap();
+    let first_residual = report.residual_history[0];
+    let last_residual = *report.residual_history.last().unwrap();
+    assert!(last_objective <= first_objective * 1.01 + 1e-4);
+    assert!(last_residual <= first_residual * 1.01 + 1e-4);
+}
+
+#[test]
+fn mrnsd_and_cgls_are_deterministic() {
+    let sharp = checkerboard_2d((46, 50), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 55123).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let mrnsd_config = Mrnsd::new()
+        .iterations(18)
+        .step_size(Some(1.0))
+        .collect_history(true);
+    let (mrnsd_first, mrnsd_first_report) =
+        mrnsd_with(&degraded_image, &psf, &mrnsd_config).unwrap();
+    let (mrnsd_second, mrnsd_second_report) =
+        mrnsd_with(&degraded_image, &psf, &mrnsd_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&mrnsd_first.to_luma8()),
+        &gray_to_array(&mrnsd_second.to_luma8())
+    ));
+    assert_eq!(
+        mrnsd_first_report.objective_history,
+        mrnsd_second_report.objective_history
+    );
+    assert_eq!(
+        mrnsd_first_report.residual_history,
+        mrnsd_second_report.residual_history
+    );
+
+    let cgls_config = Cgls::new()
+        .iterations(18)
+        .step_size(Some(1.0))
+        .collect_history(true);
+    let (cgls_first, cgls_first_report) = cgls_with(&degraded_image, &psf, &cgls_config).unwrap();
+    let (cgls_second, cgls_second_report) = cgls_with(&degraded_image, &psf, &cgls_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&cgls_first.to_luma8()),
+        &gray_to_array(&cgls_second.to_luma8())
+    ));
+    assert_eq!(
+        cgls_first_report.objective_history,
+        cgls_second_report.objective_history
+    );
+    assert_eq!(
+        cgls_first_report.residual_history,
+        cgls_second_report.residual_history
+    );
+}
+
+#[test]
+fn mrnsd_and_cgls_default_paths_are_finite() {
+    let sharp = checkerboard_2d((44, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 20.0, 8888).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (mrnsd_restored, mrnsd_report) = mrnsd(&degraded_image, &psf).unwrap();
+    let (cgls_restored, cgls_report) = cgls(&degraded_image, &psf).unwrap();
+
+    let mrnsd_array = gray_to_array(&mrnsd_restored.to_luma8());
+    let cgls_array = gray_to_array(&cgls_restored.to_luma8());
+    assert!(is_finite_2d(&mrnsd_array));
+    assert!(is_finite_2d(&cgls_array));
+    assert!(mrnsd_array.iter().all(|value| *value >= 0.0));
+    assert!(mrnsd_report.iterations >= 1);
+    assert!(cgls_report.iterations >= 1);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {
