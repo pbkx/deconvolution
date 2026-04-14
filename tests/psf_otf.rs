@@ -2,10 +2,12 @@ use deconvolution::{
     otf::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
     psf::{
-        box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus, delta2d, delta3d, disk,
-        flip, flip_3d, from_support, gaussian2d, gaussian3d, gaussian_guess, motion_guess,
-        motion_linear, normalize, normalize_3d, oriented_gaussian, pad_to, pad_to_3d, pillbox,
-        support_mask, support_mask_3d, uniform, validate, validate_3d,
+        born_wolf, box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus, delta2d, delta3d,
+        disk, flip, flip_3d, from_support, gaussian2d, gaussian3d, gaussian_guess, gibson_lanni,
+        motion_guess, motion_linear, normalize, normalize_3d, oriented_gaussian, pad_to, pad_to_3d,
+        pillbox, richards_wolf, support_mask, support_mask_3d, uniform, validate, validate_3d,
+        variable_ri_gibson_lanni, BornWolfParams, GibsonLanniParams, RichardsWolfParams,
+        VariableRiGibsonLanniParams,
     },
     psf::{Blur2D, Blur3D},
     simulate::{blur, blur_otf, checkerboard_2d},
@@ -387,4 +389,89 @@ fn blur_matches_otf_blur_shape_and_finiteness() {
     assert_eq!(by_otf.dim(), input.dim());
     assert!(by_psf.iter().all(|value| value.is_finite()));
     assert!(by_otf.iter().all(|value| value.is_finite()));
+}
+
+#[test]
+fn microscopy_models_produce_finite_normalized_kernels() {
+    let born_wolf_kernel = born_wolf(&BornWolfParams::new().dims((17, 17, 17))).unwrap();
+    let gibson_lanni_kernel = gibson_lanni(&GibsonLanniParams::new().dims((17, 17, 17))).unwrap();
+    let variable_ri_kernel =
+        variable_ri_gibson_lanni(&VariableRiGibsonLanniParams::new().dims((17, 17, 17))).unwrap();
+    let richards_wolf_kernel =
+        richards_wolf(&RichardsWolfParams::new().dims((17, 17, 17))).unwrap();
+
+    let kernels = [
+        born_wolf_kernel,
+        gibson_lanni_kernel,
+        variable_ri_kernel,
+        richards_wolf_kernel,
+    ];
+    for kernel in &kernels {
+        validate_3d(kernel).unwrap();
+        assert_eq!(kernel.dims(), (17, 17, 17));
+        assert!((kernel.sum() - 1.0).abs() < 1e-5);
+        assert!(kernel.as_array().iter().all(|value| value.is_finite()));
+        assert!(kernel.as_array().iter().all(|value| *value >= 0.0));
+    }
+}
+
+#[test]
+fn microscopy_centered_symmetric_cases_behave_sensibly() {
+    let params = BornWolfParams::new()
+        .dims((19, 19, 19))
+        .wavelength_um(0.53)
+        .numerical_aperture(1.2)
+        .refractive_index(1.33)
+        .axial_step_um(0.18);
+    let kernel = born_wolf(&params).unwrap();
+    let arr = kernel.as_array();
+    let cz = 9_usize;
+    let cy = 9_usize;
+    let cx = 9_usize;
+
+    assert!((arr[[cz, cy, cx - 2]] - arr[[cz, cy, cx + 2]]).abs() < 1e-6);
+    assert!((arr[[cz, cy - 2, cx]] - arr[[cz, cy + 2, cx]]).abs() < 1e-6);
+    assert!((arr[[cz - 2, cy, cx]] - arr[[cz + 2, cy, cx]]).abs() < 1e-6);
+    assert!(arr[[cz, cy, cx]] >= arr[[cz, cy, cx + 1]]);
+    assert!(arr[[cz, cy, cx]] >= arr[[cz + 1, cy, cx]]);
+}
+
+#[test]
+fn variable_refractive_index_changes_output_meaningfully() {
+    let uniform_index = VariableRiGibsonLanniParams::new()
+        .dims((17, 17, 17))
+        .refractive_index_start(1.36)
+        .refractive_index_end(1.36);
+    let varying_index = VariableRiGibsonLanniParams::new()
+        .dims((17, 17, 17))
+        .refractive_index_start(1.33)
+        .refractive_index_end(1.46)
+        .profile_exponent(1.4);
+
+    let uniform_kernel = variable_ri_gibson_lanni(&uniform_index).unwrap();
+    let varying_kernel = variable_ri_gibson_lanni(&varying_index).unwrap();
+
+    let l1_distance = uniform_kernel
+        .as_array()
+        .iter()
+        .zip(varying_kernel.as_array().iter())
+        .map(|(a, b)| (a - b).abs())
+        .sum::<f32>();
+    assert!(l1_distance > 1e-3);
+}
+
+#[test]
+fn microscopy_parameter_validation_rejects_invalid_sets() {
+    let invalid_born_wolf = BornWolfParams::new()
+        .dims((9, 9, 9))
+        .refractive_index(1.33)
+        .numerical_aperture(1.33);
+    let invalid_richards_wolf = RichardsWolfParams::new()
+        .dims((9, 9, 9))
+        .polarization_weight(1.2);
+
+    let err_bw = born_wolf(&invalid_born_wolf).unwrap_err();
+    let err_rw = richards_wolf(&invalid_richards_wolf).unwrap_err();
+    assert_eq!(err_bw, Error::InvalidParameter);
+    assert_eq!(err_rw, Error::InvalidParameter);
 }
