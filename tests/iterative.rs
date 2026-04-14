@@ -1,12 +1,12 @@
 use deconvolution::psf::gaussian2d;
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
 use deconvolution::{
-    bvls, bvls_with, cgls, cgls_with, damped_richardson_lucy_with, fista, fista_with, ictm,
-    ictm_with, ista, ista_with, landweber, landweber_with, mrnsd, mrnsd_with, nnls, nnls_with,
-    richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with,
-    tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with, Bvls, Cgls, Fista, Ictm,
-    Ista, Landweber, Mrnsd, Nnls, RichardsonLucy, RichardsonLucyTv, SparseBasis, TikhonovMiller,
-    VanCittert,
+    bvls, bvls_with, cgls, cgls_with, damped_richardson_lucy_with, fista, fista_with, hybr,
+    hybr_with, ictm, ictm_with, ista, ista_with, landweber, landweber_with, mrnsd, mrnsd_with,
+    nnls, nnls_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with,
+    richardson_lucy_with, tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with,
+    wpl, wpl_with, Bvls, Cgls, Fista, Hybr, Ictm, Ista, Landweber, Mrnsd, Nnls, RichardsonLucy,
+    RichardsonLucyTv, SparseBasis, TikhonovMiller, VanCittert, Wpl,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -915,6 +915,144 @@ fn mrnsd_and_cgls_default_paths_are_finite() {
     assert!(mrnsd_array.iter().all(|value| *value >= 0.0));
     assert!(mrnsd_report.iterations >= 1);
     assert!(cgls_report.iterations >= 1);
+}
+
+#[test]
+fn wpl_improves_over_blurred_baseline_and_is_finite() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 26.0, 6001).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = wpl_with(
+        &degraded_image,
+        &psf,
+        &Wpl::new()
+            .iterations(24)
+            .step_size(Some(0.9))
+            .precondition_epsilon(1e-3)
+            .positivity(true)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(restored_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(!report.objective_history.is_empty());
+    assert!(!report.residual_history.is_empty());
+    let first_objective = report.objective_history[0];
+    let last_objective = *report.objective_history.last().unwrap();
+    assert!(last_objective <= first_objective * 1.05 + 1e-4);
+}
+
+#[test]
+fn hybr_improves_over_blurred_baseline_and_is_finite() {
+    let sharp = checkerboard_2d((62, 58), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.4).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 22.0, 7003).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (restored, report) = hybr_with(
+        &degraded_image,
+        &psf,
+        &Hybr::new()
+            .iterations(24)
+            .step_size(Some(1.0))
+            .lambda(8e-4)
+            .positivity(true)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let restored_array = gray_to_array(&restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let restored_psnr = psnr(&sharp, &restored_array).unwrap();
+    assert!(restored_psnr > baseline_psnr);
+    assert!(restored_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&restored_array));
+    assert!(!report.objective_history.is_empty());
+    assert!(!report.residual_history.is_empty());
+    let first_objective = report.objective_history[0];
+    let last_objective = *report.objective_history.last().unwrap();
+    assert!(last_objective <= first_objective * 1.05 + 1e-4);
+}
+
+#[test]
+fn wpl_and_hybr_are_deterministic() {
+    let sharp = checkerboard_2d((46, 50), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.3).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 88123).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let wpl_config = Wpl::new()
+        .iterations(18)
+        .step_size(Some(0.9))
+        .precondition_epsilon(1e-3)
+        .positivity(true)
+        .collect_history(true);
+    let (wpl_first, wpl_first_report) = wpl_with(&degraded_image, &psf, &wpl_config).unwrap();
+    let (wpl_second, wpl_second_report) = wpl_with(&degraded_image, &psf, &wpl_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&wpl_first.to_luma8()),
+        &gray_to_array(&wpl_second.to_luma8())
+    ));
+    assert_eq!(
+        wpl_first_report.objective_history,
+        wpl_second_report.objective_history
+    );
+    assert_eq!(
+        wpl_first_report.residual_history,
+        wpl_second_report.residual_history
+    );
+
+    let hybr_config = Hybr::new()
+        .iterations(18)
+        .step_size(Some(1.0))
+        .lambda(1e-3)
+        .positivity(true)
+        .collect_history(true);
+    let (hybr_first, hybr_first_report) = hybr_with(&degraded_image, &psf, &hybr_config).unwrap();
+    let (hybr_second, hybr_second_report) = hybr_with(&degraded_image, &psf, &hybr_config).unwrap();
+    assert!(arrays_equal_2d(
+        &gray_to_array(&hybr_first.to_luma8()),
+        &gray_to_array(&hybr_second.to_luma8())
+    ));
+    assert_eq!(
+        hybr_first_report.objective_history,
+        hybr_second_report.objective_history
+    );
+    assert_eq!(
+        hybr_first_report.residual_history,
+        hybr_second_report.residual_history
+    );
+}
+
+#[test]
+fn wpl_and_hybr_default_paths_are_finite_on_high_noise_fixture() {
+    let sharp = checkerboard_2d((44, 44), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((7, 7), 1.2).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 8.0, 9128).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (wpl_restored, wpl_report) = wpl(&degraded_image, &psf).unwrap();
+    let (hybr_restored, hybr_report) = hybr(&degraded_image, &psf).unwrap();
+
+    let wpl_array = gray_to_array(&wpl_restored.to_luma8());
+    let hybr_array = gray_to_array(&hybr_restored.to_luma8());
+    assert!(is_finite_2d(&wpl_array));
+    assert!(is_finite_2d(&hybr_array));
+    assert!(wpl_report.iterations >= 1);
+    assert!(hybr_report.iterations >= 1);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {

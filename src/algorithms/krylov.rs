@@ -137,10 +137,166 @@ impl Cgls {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Wpl {
+    iterations: usize,
+    relative_update_tolerance: Option<f32>,
+    step_size: Option<f32>,
+    precondition_epsilon: f32,
+    positivity: bool,
+    channel_mode: ChannelMode,
+    range_policy: RangePolicy,
+    collect_history: bool,
+}
+
+impl Default for Wpl {
+    fn default() -> Self {
+        Self {
+            iterations: 40,
+            relative_update_tolerance: None,
+            step_size: None,
+            precondition_epsilon: 1e-3,
+            positivity: true,
+            channel_mode: ChannelMode::Independent,
+            range_policy: RangePolicy::PreserveInput,
+            collect_history: true,
+        }
+    }
+}
+
+impl Wpl {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn iterations(mut self, value: usize) -> Self {
+        self.iterations = value;
+        self
+    }
+
+    pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
+        self.relative_update_tolerance = value;
+        self
+    }
+
+    pub fn step_size(mut self, value: Option<f32>) -> Self {
+        self.step_size = value;
+        self
+    }
+
+    pub fn precondition_epsilon(mut self, value: f32) -> Self {
+        self.precondition_epsilon = value;
+        self
+    }
+
+    pub fn positivity(mut self, value: bool) -> Self {
+        self.positivity = value;
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.channel_mode = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.collect_history = value;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hybr {
+    iterations: usize,
+    relative_update_tolerance: Option<f32>,
+    step_size: Option<f32>,
+    lambda: f32,
+    positivity: bool,
+    channel_mode: ChannelMode,
+    range_policy: RangePolicy,
+    collect_history: bool,
+}
+
+impl Default for Hybr {
+    fn default() -> Self {
+        Self {
+            iterations: 40,
+            relative_update_tolerance: None,
+            step_size: None,
+            lambda: 1e-3,
+            positivity: false,
+            channel_mode: ChannelMode::Independent,
+            range_policy: RangePolicy::PreserveInput,
+            collect_history: true,
+        }
+    }
+}
+
+impl Hybr {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn iterations(mut self, value: usize) -> Self {
+        self.iterations = value;
+        self
+    }
+
+    pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
+        self.relative_update_tolerance = value;
+        self
+    }
+
+    pub fn step_size(mut self, value: Option<f32>) -> Self {
+        self.step_size = value;
+        self
+    }
+
+    pub fn lambda(mut self, value: f32) -> Self {
+        self.lambda = value;
+        self
+    }
+
+    pub fn positivity(mut self, value: bool) -> Self {
+        self.positivity = value;
+        self
+    }
+
+    pub fn channel_mode(mut self, value: ChannelMode) -> Self {
+        self.channel_mode = value;
+        self
+    }
+
+    pub fn range_policy(mut self, value: RangePolicy) -> Self {
+        self.range_policy = value;
+        self
+    }
+
+    pub fn collect_history(mut self, value: bool) -> Self {
+        self.collect_history = value;
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum KrylovMethod {
     Mrnsd,
-    Cgls { positivity: bool },
+    Cgls {
+        positivity: bool,
+    },
+    Wpl {
+        precondition_epsilon: f32,
+        positivity: bool,
+    },
+    Hybr {
+        lambda: f32,
+        positivity: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -203,6 +359,60 @@ pub fn cgls_with(
     )
 }
 
+pub fn wpl(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
+    wpl_with(image, psf, &Wpl::new())
+}
+
+pub fn wpl_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &Wpl,
+) -> Result<(DynamicImage, SolveReport)> {
+    run_krylov(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Wpl {
+            precondition_epsilon: config.precondition_epsilon,
+            positivity: config.positivity,
+        },
+    )
+}
+
+pub fn hybr(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
+    hybr_with(image, psf, &Hybr::new())
+}
+
+pub fn hybr_with(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &Hybr,
+) -> Result<(DynamicImage, SolveReport)> {
+    run_krylov(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Hybr {
+            lambda: config.lambda,
+            positivity: config.positivity,
+        },
+    )
+}
+
 fn run_krylov(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -211,6 +421,7 @@ fn run_krylov(
 ) -> Result<(DynamicImage, SolveReport)> {
     validate(psf)?;
     validate_config(config)?;
+    validate_method(method)?;
 
     let normalized_psf = psf.normalized()?;
     let operator = Convolution2D::new(&normalized_psf)?;
@@ -413,6 +624,20 @@ fn restore_channel(
         KrylovMethod::Cgls { positivity } => {
             restore_channel_cgls(input, operator, config, positivity, step_size)
         }
+        KrylovMethod::Wpl {
+            precondition_epsilon,
+            positivity,
+        } => restore_channel_wpl(
+            input,
+            operator,
+            config,
+            precondition_epsilon,
+            positivity,
+            step_size,
+        ),
+        KrylovMethod::Hybr { lambda, positivity } => {
+            restore_channel_hybr(input, operator, config, lambda, positivity, step_size)
+        }
     }
 }
 
@@ -602,6 +827,206 @@ fn restore_channel_cgls(
     Ok((projected, report))
 }
 
+fn restore_channel_wpl(
+    input: &Array2<f32>,
+    operator: &Convolution2D,
+    config: KrylovConfig,
+    precondition_epsilon: f32,
+    positivity: bool,
+    step_size: f32,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_step_size(step_size)?;
+    if input.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if input.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let mut estimate = input.to_owned();
+    if positivity {
+        estimate = project_nonnegative_2d(&estimate)?;
+    }
+
+    let ones = Array2::from_elem(input.dim(), 1.0_f32);
+    let response = operator.apply(&ones)?;
+    let ata_ones = operator.adjoint(&response)?;
+    let preconditioner = add_scalar_floor(&ata_ones, precondition_epsilon)?;
+
+    let mut diagnostics = Diagnostics::new();
+    let criteria = StopCriteria {
+        max_iterations: config.iterations,
+        relative_update_tol: config.relative_update_tolerance,
+        objective_plateau_window: 0,
+        objective_plateau_tol: 0.0,
+        divergence_factor: f32::MAX,
+    };
+    let mut stop_reason = StopReason::MaxIterations;
+
+    for iteration in 0..config.iterations {
+        let predicted = operator.apply(&estimate)?;
+        let residual_vec = residual(input, &predicted)?;
+        let gradient = operator.adjoint(&residual_vec)?;
+        let direction = elementwise_div(&gradient, &preconditioner)?;
+
+        let mut next = axpy(&estimate, &direction, step_size)?;
+        if positivity {
+            next = project_nonnegative_2d(&next)?;
+        }
+
+        let predicted_next = operator.apply(&next)?;
+        let residual_next = residual(input, &predicted_next)?;
+        let objective = 0.5 * squared_l2_norm(&residual_next)?;
+        let residual_update = relative_update_norm(&next, &estimate)?;
+        diagnostics.record(objective, residual_update)?;
+
+        estimate = next;
+        if let Some(reason) = check_stop(
+            &criteria,
+            iteration + 1,
+            Some(residual_update),
+            diagnostics.objective_history(),
+        )? {
+            stop_reason = reason;
+            break;
+        }
+    }
+
+    let mut report = diagnostics.finish(stop_reason);
+    if !config.collect_history {
+        report.objective_history.clear();
+        report.residual_history.clear();
+    }
+    report.estimated_nsr = None;
+
+    let normalized = normalize_range(&estimate, config.range_policy)?;
+    let projected = if positivity {
+        project_nonnegative_2d(&normalized)?
+    } else {
+        normalized
+    };
+    Ok((projected, report))
+}
+
+fn restore_channel_hybr(
+    input: &Array2<f32>,
+    operator: &Convolution2D,
+    config: KrylovConfig,
+    lambda: f32,
+    positivity: bool,
+    step_size: f32,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_step_size(step_size)?;
+    if input.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if input.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let mut estimate = input.to_owned();
+    if positivity {
+        estimate = project_nonnegative_2d(&estimate)?;
+    }
+
+    let predicted = operator.apply(&estimate)?;
+    let residual_vec = residual(input, &predicted)?;
+    let data_gradient = operator.adjoint(&residual_vec)?;
+    let regularized_gradient = subtract_scaled(&data_gradient, &estimate, lambda)?;
+    let mut p = regularized_gradient.to_owned();
+    let mut gamma = inner_product_2d(&regularized_gradient, &regularized_gradient)?;
+    if !gamma.is_finite() || gamma < 0.0 {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let mut diagnostics = Diagnostics::new();
+    let criteria = StopCriteria {
+        max_iterations: config.iterations,
+        relative_update_tol: config.relative_update_tolerance,
+        objective_plateau_window: 0,
+        objective_plateau_tol: 0.0,
+        divergence_factor: f32::MAX,
+    };
+    let mut stop_reason = StopReason::MaxIterations;
+
+    for iteration in 0..config.iterations {
+        let q = operator.apply(&p)?;
+        let q_norm = squared_l2_norm(&q)?;
+        let p_norm = squared_l2_norm(&p)?;
+        let delta = q_norm + lambda * p_norm;
+        let alpha = if delta <= 1e-12 || gamma <= 1e-12 {
+            0.0_f32
+        } else {
+            let value = step_size * (gamma / delta);
+            if !value.is_finite() || value < 0.0 {
+                return Err(Error::NonFiniteInput);
+            }
+            value
+        };
+
+        let mut next = axpy(&estimate, &p, alpha)?;
+        if positivity {
+            next = project_nonnegative_2d(&next)?;
+        }
+
+        let predicted_next = operator.apply(&next)?;
+        let residual_next = residual(input, &predicted_next)?;
+        let data_gradient_next = operator.adjoint(&residual_next)?;
+        let regularized_gradient_next = subtract_scaled(&data_gradient_next, &next, lambda)?;
+        let gamma_next = inner_product_2d(&regularized_gradient_next, &regularized_gradient_next)?;
+        if !gamma_next.is_finite() || gamma_next < 0.0 {
+            return Err(Error::NonFiniteInput);
+        }
+        let beta = if gamma <= 1e-12 {
+            0.0_f32
+        } else {
+            let value = gamma_next / gamma;
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            value
+        };
+        let p_next = axpy(&regularized_gradient_next, &p, beta)?;
+
+        let residual_norm = squared_l2_norm(&residual_next)?;
+        let estimate_norm = squared_l2_norm(&next)?;
+        let objective = 0.5 * residual_norm + 0.5 * lambda * estimate_norm;
+        if !objective.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        let residual_update = relative_update_norm(&next, &estimate)?;
+        diagnostics.record(objective, residual_update)?;
+
+        estimate = next;
+        p = p_next;
+        gamma = gamma_next;
+        if let Some(reason) = check_stop(
+            &criteria,
+            iteration + 1,
+            Some(residual_update),
+            diagnostics.objective_history(),
+        )? {
+            stop_reason = reason;
+            break;
+        }
+    }
+
+    let mut report = diagnostics.finish(stop_reason);
+    if !config.collect_history {
+        report.objective_history.clear();
+        report.residual_history.clear();
+    }
+    report.estimated_nsr = None;
+
+    let normalized = normalize_range(&estimate, config.range_policy)?;
+    let projected = if positivity {
+        project_nonnegative_2d(&normalized)?
+    } else {
+        normalized
+    };
+    Ok((projected, report))
+}
+
 fn resolve_step_size(configured: Option<f32>) -> Result<f32> {
     if let Some(step_size) = configured {
         return validate_step_size(step_size);
@@ -613,6 +1038,20 @@ fn apply_output_projection(input: &Array2<f32>, method: KrylovMethod) -> Result<
     match method {
         KrylovMethod::Mrnsd => project_nonnegative_2d(input),
         KrylovMethod::Cgls { positivity } => {
+            if positivity {
+                project_nonnegative_2d(input)
+            } else {
+                Ok(input.to_owned())
+            }
+        }
+        KrylovMethod::Wpl { positivity, .. } => {
+            if positivity {
+                project_nonnegative_2d(input)
+            } else {
+                Ok(input.to_owned())
+            }
+        }
+        KrylovMethod::Hybr { positivity, .. } => {
             if positivity {
                 project_nonnegative_2d(input)
             } else {
@@ -674,6 +1113,74 @@ fn axpy(base: &Array2<f32>, direction: &Array2<f32>, scale: f32) -> Result<Array
         for x in 0..width {
             let value = base[[y, x]] + scale * direction[[y, x]];
             if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
+    Ok(output)
+}
+
+fn subtract_scaled(base: &Array2<f32>, direction: &Array2<f32>, scale: f32) -> Result<Array2<f32>> {
+    if base.dim() != direction.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    if !scale.is_finite() || scale < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (height, width) = base.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let value = base[[y, x]] - scale * direction[[y, x]];
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
+    Ok(output)
+}
+
+fn elementwise_div(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<Array2<f32>> {
+    if lhs.dim() != rhs.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let (height, width) = lhs.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let denom = rhs[[y, x]];
+            if !denom.is_finite() || denom <= 0.0 {
+                return Err(Error::InvalidParameter);
+            }
+            let value = lhs[[y, x]] / denom;
+            if !value.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            output[[y, x]] = value;
+        }
+    }
+    Ok(output)
+}
+
+fn add_scalar_floor(input: &Array2<f32>, floor: f32) -> Result<Array2<f32>> {
+    if !floor.is_finite() || floor <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (height, width) = input.dim();
+    let mut output = Array2::zeros((height, width));
+    for y in 0..height {
+        for x in 0..width {
+            let source = input[[y, x]].abs();
+            if !source.is_finite() {
+                return Err(Error::NonFiniteInput);
+            }
+            let value = source + floor;
+            if !value.is_finite() || value <= 0.0 {
                 return Err(Error::NonFiniteInput);
             }
             output[[y, x]] = value;
@@ -943,4 +1450,25 @@ fn validate_config(config: KrylovConfig) -> Result<()> {
         validate_step_size(step_size)?;
     }
     Ok(())
+}
+
+fn validate_method(method: KrylovMethod) -> Result<()> {
+    match method {
+        KrylovMethod::Mrnsd | KrylovMethod::Cgls { .. } => Ok(()),
+        KrylovMethod::Wpl {
+            precondition_epsilon,
+            ..
+        } => {
+            if !precondition_epsilon.is_finite() || precondition_epsilon <= 0.0 {
+                return Err(Error::InvalidParameter);
+            }
+            Ok(())
+        }
+        KrylovMethod::Hybr { lambda, .. } => {
+            if !lambda.is_finite() || lambda < 0.0 {
+                return Err(Error::InvalidParameter);
+            }
+            Ok(())
+        }
+    }
 }
