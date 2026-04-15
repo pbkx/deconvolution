@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use ndarray::{Array2, Array3};
 
-use crate::{Error, Kernel3D, Result};
+use crate::{Error, Kernel2D, Kernel3D, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BornWolfParams {
@@ -499,6 +499,127 @@ pub fn richards_wolf(params: &RichardsWolfParams) -> Result<Kernel3D> {
     to_normalized_kernel(psf)
 }
 
+pub fn lorentz2d(dims: (usize, usize), gamma: f32) -> Result<Kernel2D> {
+    validate_dims_2d(dims)?;
+    validate_positive(gamma)?;
+
+    let (height, width) = dims;
+    let cy = center_coordinate(height)?;
+    let cx = center_coordinate(width)?;
+    let gamma2 = gamma * gamma;
+    if !gamma2.is_finite() || gamma2 <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut psf = Array2::zeros((height, width));
+    for y in 0..height {
+        let dy = y as f32 - cy;
+        for x in 0..width {
+            let dx = x as f32 - cx;
+            let radius2 = dx * dx + dy * dy;
+            let value = 1.0 / (1.0 + radius2 / gamma2);
+            if !value.is_finite() || value < 0.0 {
+                return Err(Error::NonFiniteInput);
+            }
+            psf[[y, x]] = value;
+        }
+    }
+
+    to_normalized_kernel2d(psf)
+}
+
+pub fn astigmatic(
+    dims: (usize, usize),
+    sigma_major: f32,
+    sigma_minor: f32,
+    angle_deg: f32,
+) -> Result<Kernel2D> {
+    validate_dims_2d(dims)?;
+    validate_positive(sigma_major)?;
+    validate_positive(sigma_minor)?;
+    if !angle_deg.is_finite() {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (height, width) = dims;
+    let cy = center_coordinate(height)?;
+    let cx = center_coordinate(width)?;
+    let theta = angle_deg.to_radians();
+    let cos_t = theta.cos();
+    let sin_t = theta.sin();
+    let major2 = sigma_major * sigma_major;
+    let minor2 = sigma_minor * sigma_minor;
+    if !major2.is_finite() || !minor2.is_finite() || major2 <= 0.0 || minor2 <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut psf = Array2::zeros((height, width));
+    for y in 0..height {
+        let dy = y as f32 - cy;
+        for x in 0..width {
+            let dx = x as f32 - cx;
+            let xr = cos_t * dx + sin_t * dy;
+            let yr = -sin_t * dx + cos_t * dy;
+            let exponent = -0.5 * (xr * xr / major2 + yr * yr / minor2);
+            let value = exponent.exp();
+            if !value.is_finite() || value < 0.0 {
+                return Err(Error::NonFiniteInput);
+            }
+            psf[[y, x]] = value;
+        }
+    }
+
+    to_normalized_kernel2d(psf)
+}
+
+pub fn double_helix(
+    dims: (usize, usize),
+    sigma: f32,
+    lobe_separation: f32,
+    angle_deg: f32,
+) -> Result<Kernel2D> {
+    validate_dims_2d(dims)?;
+    validate_positive(sigma)?;
+    validate_positive(lobe_separation)?;
+    if !angle_deg.is_finite() {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (height, width) = dims;
+    let cy = center_coordinate(height)?;
+    let cx = center_coordinate(width)?;
+    let theta = angle_deg.to_radians();
+    let half_sep = 0.5 * lobe_separation;
+    let lobe_dx = half_sep * theta.cos();
+    let lobe_dy = half_sep * theta.sin();
+    let sigma2 = sigma * sigma;
+    if !sigma2.is_finite() || sigma2 <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut psf = Array2::zeros((height, width));
+    for y in 0..height {
+        let dy = y as f32 - cy;
+        for x in 0..width {
+            let dx = x as f32 - cx;
+            let r1x = dx - lobe_dx;
+            let r1y = dy - lobe_dy;
+            let r2x = dx + lobe_dx;
+            let r2y = dy + lobe_dy;
+
+            let v1 = (-0.5 * (r1x * r1x + r1y * r1y) / sigma2).exp();
+            let v2 = (-0.5 * (r2x * r2x + r2y * r2y) / sigma2).exp();
+            let value = v1 + v2;
+            if !value.is_finite() || value < 0.0 {
+                return Err(Error::NonFiniteInput);
+            }
+            psf[[y, x]] = value;
+        }
+    }
+
+    to_normalized_kernel2d(psf)
+}
+
 fn validate_born_wolf_params(params: &BornWolfParams) -> Result<()> {
     validate_dims_3d(params.dims)?;
     validate_positive(params.wavelength_um)?;
@@ -582,6 +703,13 @@ fn validate_richards_wolf_params(params: &RichardsWolfParams) -> Result<()> {
 
 fn validate_dims_3d(dims: (usize, usize, usize)) -> Result<()> {
     if dims.0 == 0 || dims.1 == 0 || dims.2 == 0 {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn validate_dims_2d(dims: (usize, usize)) -> Result<()> {
+    if dims.0 == 0 || dims.1 == 0 {
         return Err(Error::InvalidParameter);
     }
     Ok(())
@@ -697,6 +825,20 @@ fn airy_like(
         return Err(Error::NonFiniteInput);
     }
     Ok(value)
+}
+
+fn to_normalized_kernel2d(psf: Array2<f32>) -> Result<Kernel2D> {
+    if psf.iter().any(|value| !value.is_finite() || *value < 0.0) {
+        return Err(Error::NonFiniteInput);
+    }
+    let sum = psf.sum();
+    if !sum.is_finite() || sum <= f32::EPSILON {
+        return Err(Error::InvalidPsf);
+    }
+
+    let mut kernel = Kernel2D::new(psf)?;
+    kernel.normalize()?;
+    Ok(kernel)
 }
 
 fn to_normalized_kernel(psf: Array3<f32>) -> Result<Kernel3D> {

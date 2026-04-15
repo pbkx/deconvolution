@@ -1,13 +1,13 @@
 use deconvolution::{
-    otf::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
+    otf::{defocus_otf, koehler_otf, otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
     psf::{
-        born_wolf, box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus, delta2d, delta3d,
-        disk, flip, flip_3d, from_support, gaussian2d, gaussian3d, gaussian_guess, gibson_lanni,
-        motion_guess, motion_linear, normalize, normalize_3d, oriented_gaussian, pad_to, pad_to_3d,
-        pillbox, richards_wolf, support_mask, support_mask_3d, uniform, validate, validate_3d,
-        variable_ri_gibson_lanni, BornWolfParams, GibsonLanniParams, RichardsWolfParams,
-        VariableRiGibsonLanniParams,
+        astigmatic, born_wolf, box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus,
+        delta2d, delta3d, disk, double_helix, flip, flip_3d, from_support, gaussian2d, gaussian3d,
+        gaussian_guess, gibson_lanni, lorentz2d, motion_guess, motion_linear, normalize,
+        normalize_3d, oriented_gaussian, pad_to, pad_to_3d, pillbox, richards_wolf, support_mask,
+        support_mask_3d, uniform, validate, validate_3d, variable_ri_gibson_lanni, BornWolfParams,
+        GibsonLanniParams, RichardsWolfParams, VariableRiGibsonLanniParams,
     },
     psf::{Blur2D, Blur3D},
     simulate::{blur, blur_otf, checkerboard_2d},
@@ -474,4 +474,92 @@ fn microscopy_parameter_validation_rejects_invalid_sets() {
     let err_rw = richards_wolf(&invalid_richards_wolf).unwrap_err();
     assert_eq!(err_bw, Error::InvalidParameter);
     assert_eq!(err_rw, Error::InvalidParameter);
+}
+
+#[test]
+fn specialty_psf_models_are_normalized_and_finite() {
+    let lorentz = lorentz2d((25, 23), 2.4).unwrap();
+    let astig = astigmatic((25, 23), 3.0, 1.2, 15.0).unwrap();
+    let helix = double_helix((25, 23), 1.8, 8.0, 35.0).unwrap();
+
+    let kernels = [lorentz, astig, helix];
+    for kernel in &kernels {
+        validate(kernel).unwrap();
+        assert!((kernel.sum() - 1.0).abs() < 1e-5);
+        assert!(kernel.as_array().iter().all(|value| value.is_finite()));
+        assert!(kernel.as_array().iter().all(|value| *value >= 0.0));
+    }
+}
+
+#[test]
+fn astigmatic_and_double_helix_have_expected_structure() {
+    let astig = astigmatic((31, 31), 4.0, 1.5, 0.0).unwrap();
+    let astig_arr = astig.as_array();
+    let center = 15_usize;
+    let row = astig_arr.row(center).sum();
+    let col = astig_arr.column(center).sum();
+    assert!(row > col);
+
+    let helix = double_helix((41, 41), 2.0, 12.0, 0.0).unwrap();
+    let helix_arr = helix.as_array();
+    let c = 20_usize;
+    let center_value = helix_arr[[c, c]];
+    let left_peak = helix_arr[[c, c - 6]];
+    let right_peak = helix_arr[[c, c + 6]];
+    assert!(left_peak > center_value);
+    assert!(right_peak > center_value);
+    assert!((left_peak - right_peak).abs() < 1e-6);
+}
+
+#[test]
+fn specialty_otf_models_have_expected_structure() {
+    let koehler = koehler_otf((32, 30), 1.0).unwrap();
+    let defocus = defocus_otf((32, 30), 1.0, 0.8).unwrap();
+
+    assert_eq!(koehler.dims(), (32, 30));
+    assert_eq!(defocus.dims(), (32, 30));
+    assert!(koehler.as_array().iter().all(|value| value.is_finite()));
+    assert!(defocus.as_array().iter().all(|value| value.is_finite()));
+    assert!((koehler.as_array()[[0, 0]] - Complex32::new(1.0, 0.0)).norm() < 1e-6);
+    assert!((defocus.as_array()[[0, 0]] - Complex32::new(1.0, 0.0)).norm() < 1e-6);
+
+    let (height, width) = koehler.dims();
+    for y in 0..height {
+        let ny = wrap_neg(y, height);
+        for x in 0..width {
+            let nx = wrap_neg(x, width);
+            let k_left = koehler.as_array()[[y, x]];
+            let k_right = koehler.as_array()[[ny, nx]].conj();
+            let d_left = defocus.as_array()[[y, x]];
+            let d_right = defocus.as_array()[[ny, nx]].conj();
+            assert!((k_left - k_right).norm() < 1e-6);
+            assert!((d_left - d_right).norm() < 1e-6);
+        }
+    }
+
+    let corner = koehler.as_array()[[height / 2, width / 2]];
+    assert!(corner.norm() < 1e-5);
+}
+
+#[test]
+fn specialty_model_parameter_validation_rejects_invalid_inputs() {
+    let err_lorentz = lorentz2d((0, 9), 1.0).unwrap_err();
+    let err_astig = astigmatic((9, 9), 1.0, -1.0, 0.0).unwrap_err();
+    let err_helix = double_helix((9, 9), 1.0, 0.0, 0.0).unwrap_err();
+    let err_koehler = koehler_otf((9, 9), 0.0).unwrap_err();
+    let err_defocus = defocus_otf((9, 9), 1.0, -0.1).unwrap_err();
+
+    assert_eq!(err_lorentz, Error::InvalidParameter);
+    assert_eq!(err_astig, Error::InvalidParameter);
+    assert_eq!(err_helix, Error::InvalidParameter);
+    assert_eq!(err_koehler, Error::InvalidParameter);
+    assert_eq!(err_defocus, Error::InvalidParameter);
+}
+
+fn wrap_neg(index: usize, size: usize) -> usize {
+    if index == 0 {
+        0
+    } else {
+        size - index
+    }
 }

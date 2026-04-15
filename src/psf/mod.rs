@@ -13,8 +13,9 @@ pub use constraints::{apply_constraint, apply_constraints, PsfConstraint};
 pub use init::{from_support, gaussian_guess, motion_guess, uniform};
 pub use kernel::{Blur2D, Blur3D, Kernel2D, Kernel3D};
 pub use microscopy::{
-    born_wolf, gibson_lanni, richards_wolf, variable_ri_gibson_lanni, BornWolfParams,
-    GibsonLanniParams, RichardsWolfParams, VariableRiGibsonLanniParams,
+    astigmatic, born_wolf, double_helix, gibson_lanni, lorentz2d, richards_wolf,
+    variable_ri_gibson_lanni, BornWolfParams, GibsonLanniParams, RichardsWolfParams,
+    VariableRiGibsonLanniParams,
 };
 pub use support::{
     center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,
