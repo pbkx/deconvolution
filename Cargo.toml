@@ -18,3 +18,22 @@ rand_distr = "0.6.0"
 [features]
 default = ["rayon"]
 rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "spectral"
+harness = false
+
+[[bench]]
+name = "rl"
+harness = false
+
+[[bench]]
+name = "blind"
+harness = false
+
+[[bench]]
+name = "volume"
+harness = false
