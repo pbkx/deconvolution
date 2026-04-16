@@ -1,12 +1,13 @@
 use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
+use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d, gaussian_blob_2d};
 use deconvolution::{
-    bvls, bvls_with, cgls, cgls_with, damped_richardson_lucy_with, fista, fista_with, hybr,
-    hybr_with, ictm, ictm_with, ista, ista_with, landweber, landweber_with, mrnsd, mrnsd_with,
-    nnls, nnls_with, richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with,
-    richardson_lucy_with, tikhonov_miller, tikhonov_miller_with, van_cittert, van_cittert_with,
-    wpl, wpl_with, Bvls, Cgls, Fista, Hybr, Ictm, Ista, Landweber, Mrnsd, Nnls, RichardsonLucy,
-    RichardsonLucyTv, SparseBasis, TikhonovMiller, VanCittert, Wpl,
+    bvls, bvls_with, cgls, cgls_with, cmle, cmle_with, damped_richardson_lucy_with, fista,
+    fista_with, gmle_with, hybr, hybr_with, ictm, ictm_with, ista, ista_with, landweber,
+    landweber_with, mrnsd, mrnsd_with, nnls, nnls_with, qmle, qmle_with, richardson_lucy,
+    richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller,
+    tikhonov_miller_with, van_cittert, van_cittert_with, wpl, wpl_with, Bvls, Cgls, Cmle, Fista,
+    Gmle, Hybr, Ictm, Ista, Landweber, Mrnsd, Nnls, Qmle, RichardsonLucy, RichardsonLucyTv,
+    SparseBasis, TikhonovMiller, VanCittert, Wpl,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
@@ -1053,6 +1054,118 @@ fn wpl_and_hybr_default_paths_are_finite_on_high_noise_fixture() {
     assert!(is_finite_2d(&hybr_array));
     assert!(wpl_report.iterations >= 1);
     assert!(hybr_report.iterations >= 1);
+}
+
+#[test]
+fn cmle_gmle_qmle_improve_on_microscopy_like_fixture() {
+    let sharp = gaussian_blob_2d((64, 64), 6.0).unwrap();
+    let psf = gaussian2d((11, 11), 1.9).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 28.0, 4477).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (cmle_restored, cmle_report) = cmle_with(
+        &degraded_image,
+        &psf,
+        &Cmle::new()
+            .iterations(20)
+            .snr(28.0)
+            .acuity(1.0)
+            .collect_history(true),
+    )
+    .unwrap();
+    let (gmle_restored, gmle_report) = gmle_with(
+        &degraded_image,
+        &psf,
+        &Gmle::new()
+            .iterations(16)
+            .snr(28.0)
+            .acuity(0.85)
+            .roughness(1.1)
+            .collect_history(true),
+    )
+    .unwrap();
+    let (qmle_restored, qmle_report) = qmle_with(
+        &degraded_image,
+        &psf,
+        &Qmle::new()
+            .iterations(10)
+            .snr(60.0)
+            .acuity(1.1)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    let baseline_array = gray_to_array(&degraded_image.to_luma8());
+    let cmle_array = gray_to_array(&cmle_restored.to_luma8());
+    let gmle_array = gray_to_array(&gmle_restored.to_luma8());
+    let qmle_array = gray_to_array(&qmle_restored.to_luma8());
+    let baseline_psnr = psnr(&sharp, &baseline_array).unwrap();
+    let cmle_psnr = psnr(&sharp, &cmle_array).unwrap();
+    let gmle_psnr = psnr(&sharp, &gmle_array).unwrap();
+    let qmle_psnr = psnr(&sharp, &qmle_array).unwrap();
+
+    assert!(cmle_psnr > baseline_psnr);
+    assert!(gmle_psnr > baseline_psnr);
+    assert!(qmle_psnr > baseline_psnr);
+    assert!(cmle_array.iter().all(|value| *value >= 0.0));
+    assert!(gmle_array.iter().all(|value| *value >= 0.0));
+    assert!(qmle_array.iter().all(|value| *value >= 0.0));
+    assert!(is_finite_2d(&cmle_array));
+    assert!(is_finite_2d(&gmle_array));
+    assert!(is_finite_2d(&qmle_array));
+    assert!(!cmle_report.objective_history.is_empty());
+    assert!(!gmle_report.objective_history.is_empty());
+    assert!(!qmle_report.objective_history.is_empty());
+}
+
+#[test]
+fn gmle_is_not_worse_than_cmle_on_high_noise_fixture() {
+    let sharp = checkerboard_2d((64, 64), 4, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((11, 11), 1.8).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 7.0, 8399).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (cmle_restored, _) = cmle_with(
+        &degraded_image,
+        &psf,
+        &Cmle::new().iterations(24).snr(8.0).acuity(1.15),
+    )
+    .unwrap();
+    let (gmle_restored, _) = gmle_with(
+        &degraded_image,
+        &psf,
+        &Gmle::new()
+            .iterations(16)
+            .snr(8.0)
+            .acuity(0.8)
+            .roughness(1.4),
+    )
+    .unwrap();
+
+    let cmle_psnr = psnr(&sharp, &gray_to_array(&cmle_restored.to_luma8())).unwrap();
+    let gmle_psnr = psnr(&sharp, &gray_to_array(&gmle_restored.to_luma8())).unwrap();
+    assert!(gmle_psnr + 1e-3 >= cmle_psnr);
+}
+
+#[test]
+fn qmle_converges_faster_than_cmle_and_still_improves() {
+    let sharp = checkerboard_2d((60, 60), 5, 0.0, 1.0).unwrap();
+    let psf = gaussian2d((9, 9), 1.5).unwrap();
+    let blurred = blur(&sharp, &psf).unwrap();
+    let degraded = add_poisson_noise(&blurred, 24.0, 5007).unwrap();
+    let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
+
+    let (cmle_restored, cmle_report) = cmle(&degraded_image, &psf).unwrap();
+    let (qmle_restored, qmle_report) = qmle(&degraded_image, &psf).unwrap();
+
+    let baseline_psnr = psnr(&sharp, &gray_to_array(&degraded_image.to_luma8())).unwrap();
+    let qmle_psnr = psnr(&sharp, &gray_to_array(&qmle_restored.to_luma8())).unwrap();
+    let cmle_psnr = psnr(&sharp, &gray_to_array(&cmle_restored.to_luma8())).unwrap();
+    assert!(qmle_report.iterations <= cmle_report.iterations);
+    assert!(qmle_psnr > baseline_psnr);
+    assert!(cmle_psnr > baseline_psnr);
 }
 
 fn array_to_gray(input: &Array2<f32>) -> deconvolution::Result<GrayImage> {

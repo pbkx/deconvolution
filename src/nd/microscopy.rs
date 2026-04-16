@@ -4,7 +4,10 @@ use ndarray::{Array3, Axis};
 use super::convert::{
     array2_to_dynamic, dynamic_to_array2, kernel3_to_projected_kernel2, validate_array3,
 };
-use crate::{Error, Result, RichardsonLucy, RichardsonLucyTv, SolveReport, StopReason, Wiener};
+use crate::{
+    Cmle, Error, Gmle, Qmle, Result, RichardsonLucy, RichardsonLucyTv, SolveReport, StopReason,
+    Wiener,
+};
 
 pub fn wiener(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<Array3<f32>> {
     wiener_with(volume, psf, &Wiener::new())
@@ -54,6 +57,51 @@ pub fn richardson_lucy_tv_with(
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
         crate::richardson_lucy_tv_with(slice, psf, config)
+    })
+}
+
+pub fn cmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
+    cmle_with(volume, psf, &Cmle::new())
+}
+
+pub fn cmle_with(
+    volume: &Array3<f32>,
+    psf: &Array3<f32>,
+    config: &Cmle,
+) -> Result<(Array3<f32>, SolveReport)> {
+    let kernel = kernel3_to_projected_kernel2(psf)?;
+    run_slicewise_report(volume, &kernel, |slice, psf| {
+        crate::cmle_with(slice, psf, config)
+    })
+}
+
+pub fn gmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
+    gmle_with(volume, psf, &Gmle::new())
+}
+
+pub fn gmle_with(
+    volume: &Array3<f32>,
+    psf: &Array3<f32>,
+    config: &Gmle,
+) -> Result<(Array3<f32>, SolveReport)> {
+    let kernel = kernel3_to_projected_kernel2(psf)?;
+    run_slicewise_report(volume, &kernel, |slice, psf| {
+        crate::gmle_with(slice, psf, config)
+    })
+}
+
+pub fn qmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
+    qmle_with(volume, psf, &Qmle::new())
+}
+
+pub fn qmle_with(
+    volume: &Array3<f32>,
+    psf: &Array3<f32>,
+    config: &Qmle,
+) -> Result<(Array3<f32>, SolveReport)> {
+    let kernel = kernel3_to_projected_kernel2(psf)?;
+    run_slicewise_report(volume, &kernel, |slice, psf| {
+        crate::qmle_with(slice, psf, config)
     })
 }
 

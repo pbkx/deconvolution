@@ -2,6 +2,7 @@ mod constrained;
 mod inverse;
 mod iterative;
 mod krylov;
+mod mle;
 mod proximal;
 mod rl;
 mod wiener;
@@ -20,6 +21,7 @@ pub use iterative::{
 pub use krylov::{
     cgls, cgls_with, hybr, hybr_with, mrnsd, mrnsd_with, wpl, wpl_with, Cgls, Hybr, Mrnsd, Wpl,
 };
+pub use mle::{cmle, cmle_with, gmle, gmle_with, qmle, qmle_with, Cmle, Gmle, Qmle};
 pub use proximal::{fista, fista_with, ista, ista_with, Fista, Ista, SparseBasis};
 pub use rl::{
     damped_richardson_lucy, damped_richardson_lucy_with, richardson_lucy, richardson_lucy_tv,

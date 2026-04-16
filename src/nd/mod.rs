@@ -10,3 +10,4 @@ pub use known_psf::{
     tikhonov_miller_with, unsupervised_wiener, unsupervised_wiener_with, van_cittert,
     van_cittert_with, wiener, wiener_with, wpl, wpl_with,
 };
+pub use microscopy::{cmle, cmle_with, gmle, gmle_with, qmle, qmle_with};

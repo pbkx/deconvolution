@@ -2,8 +2,8 @@ use deconvolution::nd;
 use deconvolution::psf::{gaussian2d, gaussian3d, motion_linear, uniform};
 use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d, phantom_3d};
 use deconvolution::{
-    blind::BlindRichardsonLucy, richardson_lucy_with, wiener_with, Error, Kernel2D, Result,
-    RichardsonLucy, Wiener,
+    blind::BlindRichardsonLucy, richardson_lucy_with, wiener_with, Cmle, Error, Gmle, Kernel2D,
+    Qmle, Result, RichardsonLucy, Wiener,
 };
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::{Array2, Array3, Axis};
@@ -109,6 +109,84 @@ fn blind_nd_path_returns_normalized_psf() {
     assert!(output.psf.as_array().iter().all(|value| *value >= 0.0));
 }
 
+#[test]
+fn nd_mle_family_improves_on_microscopy_volume_fixture() {
+    let sharp = phantom_3d((9, 40, 40)).unwrap();
+    let psf_3d = gaussian3d((7, 9, 9), 1.5).unwrap();
+    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
+    let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let degraded = add_poisson_noise_volume_slicewise(&blurred, 22.0, 9021).unwrap();
+
+    let (cmle_restored, cmle_report) = nd::cmle_with(
+        &degraded,
+        psf_3d.as_array(),
+        &Cmle::new().iterations(18).snr(22.0).acuity(1.0),
+    )
+    .unwrap();
+    let (gmle_restored, gmle_report) = nd::gmle_with(
+        &degraded,
+        psf_3d.as_array(),
+        &Gmle::new()
+            .iterations(14)
+            .snr(22.0)
+            .acuity(0.85)
+            .roughness(1.1),
+    )
+    .unwrap();
+    let (qmle_restored, qmle_report) = nd::qmle_with(
+        &degraded,
+        psf_3d.as_array(),
+        &Qmle::new().iterations(9).snr(60.0).acuity(1.1),
+    )
+    .unwrap();
+
+    let baseline_mse = mse3(&sharp, &degraded).unwrap();
+    let cmle_mse = mse3(&sharp, &cmle_restored).unwrap();
+    let gmle_mse = mse3(&sharp, &gmle_restored).unwrap();
+    let qmle_mse = mse3(&sharp, &qmle_restored).unwrap();
+    assert!(cmle_mse < baseline_mse);
+    assert!(gmle_mse < baseline_mse);
+    assert!(qmle_mse < baseline_mse);
+    assert!(is_nonnegative_3d(&cmle_restored));
+    assert!(is_nonnegative_3d(&gmle_restored));
+    assert!(is_nonnegative_3d(&qmle_restored));
+    assert!(is_finite_3d(&cmle_restored));
+    assert!(is_finite_3d(&gmle_restored));
+    assert!(is_finite_3d(&qmle_restored));
+    assert!(gmle_report.iterations <= cmle_report.iterations);
+    assert!(qmle_report.iterations <= cmle_report.iterations);
+}
+
+#[test]
+fn nd_gmle_is_not_worse_than_nd_cmle_on_high_noise_volume() {
+    let sharp = phantom_3d((9, 40, 40)).unwrap();
+    let psf_3d = gaussian3d((7, 9, 9), 1.6).unwrap();
+    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
+    let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let degraded = add_poisson_noise_volume_slicewise(&blurred, 7.0, 12303).unwrap();
+
+    let (cmle_restored, _) = nd::cmle_with(
+        &degraded,
+        psf_3d.as_array(),
+        &Cmle::new().iterations(22).snr(8.0).acuity(1.15),
+    )
+    .unwrap();
+    let (gmle_restored, _) = nd::gmle_with(
+        &degraded,
+        psf_3d.as_array(),
+        &Gmle::new()
+            .iterations(14)
+            .snr(8.0)
+            .acuity(0.8)
+            .roughness(1.4),
+    )
+    .unwrap();
+
+    let cmle_mse = mse3(&sharp, &cmle_restored).unwrap();
+    let gmle_mse = mse3(&sharp, &gmle_restored).unwrap();
+    assert!(gmle_mse <= cmle_mse * 1.01 + 1e-6);
+}
+
 fn project_psf3d(psf: &Array3<f32>) -> Result<Kernel2D> {
     if psf.is_empty() {
         return Err(Error::InvalidPsf);
@@ -142,6 +220,32 @@ fn blur_volume_slicewise(volume: &Array3<f32>, psf: &Kernel2D) -> Result<Array3<
         let slice = volume.index_axis(Axis(0), z).to_owned();
         let blurred = blur(&slice, psf)?;
         output.index_axis_mut(Axis(0), z).assign(&blurred);
+    }
+    Ok(output)
+}
+
+fn add_poisson_noise_volume_slicewise(
+    volume: &Array3<f32>,
+    peak: f32,
+    seed: u64,
+) -> Result<Array3<f32>> {
+    if volume.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if volume.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+    if !peak.is_finite() || peak <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let (depth, height, width) = volume.dim();
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        let slice = volume.index_axis(Axis(0), z).to_owned();
+        let slice_seed = seed.wrapping_add((z as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let noisy = add_poisson_noise(&slice, peak, slice_seed)?;
+        output.index_axis_mut(Axis(0), z).assign(&noisy);
     }
     Ok(output)
 }
@@ -210,4 +314,12 @@ fn max_abs_diff_2d(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<f32> {
         max_diff = max_diff.max(diff);
     }
     Ok(max_diff)
+}
+
+fn is_finite_3d(input: &Array3<f32>) -> bool {
+    input.iter().all(|value| value.is_finite())
+}
+
+fn is_nonnegative_3d(input: &Array3<f32>) -> bool {
+    input.iter().all(|value| *value >= 0.0)
 }
