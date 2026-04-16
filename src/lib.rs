@@ -5,6 +5,7 @@ mod core;
 
 pub mod blind;
 pub mod error;
+pub mod nd;
 pub mod otf;
 pub mod prelude;
 pub mod preprocess;
