@@ -76,25 +76,25 @@ fn convolve_2d_same(input: &Array2<f32>, kernel: &Array2<f32>) -> Result<Array2<
     let mut output = Array2::zeros((height, width));
 
     for y in 0..height {
-        let y_i64 = to_i64(y)?;
+        let y_i64 = y as i64;
         for x in 0..width {
-            let x_i64 = to_i64(x)?;
+            let x_i64 = x as i64;
             let mut acc = 0.0_f32;
             for ky in 0..kernel_h {
-                let ky_i64 = to_i64(ky)?;
+                let ky_i64 = ky as i64;
                 let iy = y_i64 + ky_i64 - center_y;
                 if iy < 0 || iy >= height_i64 {
                     continue;
                 }
+                let iy_usize = iy as usize;
                 for kx in 0..kernel_w {
-                    let kx_i64 = to_i64(kx)?;
+                    let kx_i64 = kx as i64;
                     let ix = x_i64 + kx_i64 - center_x;
                     if ix < 0 || ix >= width_i64 {
                         continue;
                     }
 
-                    let iy_usize = to_usize(iy)?;
-                    let ix_usize = to_usize(ix)?;
+                    let ix_usize = ix as usize;
                     acc += input[[iy_usize, ix_usize]] * kernel[[ky, kx]];
                 }
             }
@@ -124,34 +124,34 @@ fn convolve_3d_same(input: &Array3<f32>, kernel: &Array3<f32>) -> Result<Array3<
     let mut output = Array3::zeros((depth, height, width));
 
     for d in 0..depth {
-        let d_i64 = to_i64(d)?;
+        let d_i64 = d as i64;
         for y in 0..height {
-            let y_i64 = to_i64(y)?;
+            let y_i64 = y as i64;
             for x in 0..width {
-                let x_i64 = to_i64(x)?;
+                let x_i64 = x as i64;
                 let mut acc = 0.0_f32;
                 for kd in 0..kernel_d {
-                    let kd_i64 = to_i64(kd)?;
+                    let kd_i64 = kd as i64;
                     let id = d_i64 + kd_i64 - center_d;
                     if id < 0 || id >= depth_i64 {
                         continue;
                     }
+                    let id_usize = id as usize;
                     for ky in 0..kernel_h {
-                        let ky_i64 = to_i64(ky)?;
+                        let ky_i64 = ky as i64;
                         let iy = y_i64 + ky_i64 - center_y;
                         if iy < 0 || iy >= height_i64 {
                             continue;
                         }
+                        let iy_usize = iy as usize;
                         for kx in 0..kernel_w {
-                            let kx_i64 = to_i64(kx)?;
+                            let kx_i64 = kx as i64;
                             let ix = x_i64 + kx_i64 - center_x;
                             if ix < 0 || ix >= width_i64 {
                                 continue;
                             }
 
-                            let id_usize = to_usize(id)?;
-                            let iy_usize = to_usize(iy)?;
-                            let ix_usize = to_usize(ix)?;
+                            let ix_usize = ix as usize;
                             acc += input[[id_usize, iy_usize, ix_usize]] * kernel[[kd, ky, kx]];
                         }
                     }
@@ -197,10 +197,6 @@ fn flip_3d(kernel: &Array3<f32>) -> Array3<f32> {
 
 fn to_i64(value: usize) -> Result<i64> {
     i64::try_from(value).map_err(|_| Error::DimensionMismatch)
-}
-
-fn to_usize(value: i64) -> Result<usize> {
-    usize::try_from(value).map_err(|_| Error::DimensionMismatch)
 }
 
 #[cfg(test)]

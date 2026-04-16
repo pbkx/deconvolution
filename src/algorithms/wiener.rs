@@ -359,16 +359,33 @@ fn restore_color(
     }
 
     let mut stats = Vec::new();
+    let mut cache = PlanCache::new();
     let restored = match config.channel_mode {
-        ChannelMode::Independent | ChannelMode::IgnoreAlpha => {
-            restore_independent(color, blur_transfer, correlation, config, &mut stats)?
-        }
-        ChannelMode::LumaOnly => {
-            restore_luma_only(color, blur_transfer, correlation, config, &mut stats)?
-        }
-        ChannelMode::PremultipliedAlpha => {
-            restore_premultiplied(color, alpha, blur_transfer, correlation, config, &mut stats)?
-        }
+        ChannelMode::Independent | ChannelMode::IgnoreAlpha => restore_independent(
+            color,
+            blur_transfer,
+            correlation,
+            config,
+            &mut stats,
+            &mut cache,
+        )?,
+        ChannelMode::LumaOnly => restore_luma_only(
+            color,
+            blur_transfer,
+            correlation,
+            config,
+            &mut stats,
+            &mut cache,
+        )?,
+        ChannelMode::PremultipliedAlpha => restore_premultiplied(
+            color,
+            alpha,
+            blur_transfer,
+            correlation,
+            config,
+            &mut stats,
+            &mut cache,
+        )?,
     };
 
     Ok((restored, stats))
@@ -380,6 +397,7 @@ fn restore_independent(
     correlation: CorrelationForm<'_>,
     config: &Wiener,
     stats: &mut Vec<ChannelStats>,
+    cache: &mut PlanCache,
 ) -> Result<Array3<f32>> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
@@ -389,15 +407,13 @@ fn restore_independent(
     for channel_idx in 0..channels {
         let channel = color.index_axis(Axis(0), channel_idx).to_owned();
         let (restored, channel_stats) =
-            restore_channel(&channel, blur_transfer, correlation, config)?;
+            restore_channel(&channel, blur_transfer, correlation, config, cache)?;
         if config.collect_history {
             stats.push(channel_stats);
         }
-        for y in 0..height {
-            for x in 0..width {
-                output[[channel_idx, y, x]] = restored[[y, x]];
-            }
-        }
+        output
+            .index_axis_mut(Axis(0), channel_idx)
+            .assign(&restored);
     }
 
     Ok(output)
@@ -409,12 +425,13 @@ fn restore_luma_only(
     correlation: CorrelationForm<'_>,
     config: &Wiener,
     stats: &mut Vec<ChannelStats>,
+    cache: &mut PlanCache,
 ) -> Result<Array3<f32>> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
     let width = color.shape()[2];
     if channels == 1 {
-        return restore_independent(color, blur_transfer, correlation, config, stats);
+        return restore_independent(color, blur_transfer, correlation, config, stats, cache);
     }
 
     let mut luma = Array2::zeros((height, width));
@@ -428,7 +445,7 @@ fn restore_luma_only(
     }
 
     let (restored_luma, channel_stats) =
-        restore_channel(&luma, blur_transfer, correlation, config)?;
+        restore_channel(&luma, blur_transfer, correlation, config, cache)?;
     if config.collect_history {
         stats.push(channel_stats);
     }
@@ -446,11 +463,7 @@ fn restore_luma_only(
     for c in 0..channels {
         let channel = output.index_axis(Axis(0), c).to_owned();
         let normalized = normalize_range(&channel, config.range_policy)?;
-        for y in 0..height {
-            for x in 0..width {
-                output[[c, y, x]] = normalized[[y, x]];
-            }
-        }
+        output.index_axis_mut(Axis(0), c).assign(&normalized);
     }
 
     Ok(output)
@@ -463,16 +476,17 @@ fn restore_premultiplied(
     correlation: CorrelationForm<'_>,
     config: &Wiener,
     stats: &mut Vec<ChannelStats>,
+    cache: &mut PlanCache,
 ) -> Result<Array3<f32>> {
     let Some(alpha) = alpha else {
-        return restore_independent(color, blur_transfer, correlation, config, stats);
+        return restore_independent(color, blur_transfer, correlation, config, stats, cache);
     };
 
     let channels = color.shape()[0];
     let height = color.shape()[1];
     let width = color.shape()[2];
     if channels != 3 || alpha.dim() != (height, width) {
-        return restore_independent(color, blur_transfer, correlation, config, stats);
+        return restore_independent(color, blur_transfer, correlation, config, stats, cache);
     }
 
     let mut premultiplied = Array3::zeros((channels, height, width));
@@ -485,7 +499,14 @@ fn restore_premultiplied(
         }
     }
 
-    let restored = restore_independent(&premultiplied, blur_transfer, correlation, config, stats)?;
+    let restored = restore_independent(
+        &premultiplied,
+        blur_transfer,
+        correlation,
+        config,
+        stats,
+        cache,
+    )?;
     let mut output = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
@@ -503,11 +524,7 @@ fn restore_premultiplied(
     for c in 0..channels {
         let channel = output.index_axis(Axis(0), c).to_owned();
         let normalized = normalize_range(&channel, config.range_policy)?;
-        for y in 0..height {
-            for x in 0..width {
-                output[[c, y, x]] = normalized[[y, x]];
-            }
-        }
+        output.index_axis_mut(Axis(0), c).assign(&normalized);
     }
 
     Ok(output)
@@ -518,6 +535,7 @@ fn restore_channel(
     blur_transfer: &Array2<Complex32>,
     correlation: CorrelationForm<'_>,
     config: &Wiener,
+    cache: &mut PlanCache,
 ) -> Result<(Array2<f32>, ChannelStats)> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
@@ -528,10 +546,9 @@ fn restore_channel(
 
     let (height, width) = input.dim();
     let padded = pad_to_dims(input, blur_transfer.dim(), config.boundary)?;
-    let mut cache = PlanCache::new();
-    let mut spectrum = fft2_forward_real(&padded, &mut cache)?;
+    let mut spectrum = fft2_forward_real(&padded, cache)?;
     let channel_stats = apply_wiener(&mut spectrum, blur_transfer, correlation)?;
-    let restored = fft2_inverse_complex(&spectrum, &mut cache)?;
+    let restored = fft2_inverse_complex(&spectrum, cache)?;
 
     let mut cropped = Array2::zeros((height, width));
     for y in 0..height {

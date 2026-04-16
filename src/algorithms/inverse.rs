@@ -301,14 +301,13 @@ fn restore_color(
     let otf = psf2otf(psf, fft_dims)?;
 
     let mut output = Array3::zeros((channels, height, width));
+    let mut cache = PlanCache::new();
     for channel_idx in 0..channels {
         let channel = color.index_axis(Axis(0), channel_idx).to_owned();
-        let restored = restore_channel(&channel, &otf, config, mode)?;
-        for y in 0..height {
-            for x in 0..width {
-                output[[channel_idx, y, x]] = restored[[y, x]];
-            }
-        }
+        let restored = restore_channel(&channel, &otf, config, mode, &mut cache)?;
+        output
+            .index_axis_mut(Axis(0), channel_idx)
+            .assign(&restored);
     }
 
     Ok(output)
@@ -336,6 +335,7 @@ fn restore_color_regularized(
     let regularizer_transfer = spectral_response_2d(regularizer, fft_dims)?;
 
     let mut output = Array3::zeros((channels, height, width));
+    let mut cache = PlanCache::new();
     for channel_idx in 0..channels {
         let channel = color.index_axis(Axis(0), channel_idx).to_owned();
         let restored = restore_channel_regularized(
@@ -345,12 +345,11 @@ fn restore_color_regularized(
             config.lambda,
             config.stabilization_floor,
             config.range_policy,
+            &mut cache,
         )?;
-        for y in 0..height {
-            for x in 0..width {
-                output[[channel_idx, y, x]] = restored[[y, x]];
-            }
-        }
+        output
+            .index_axis_mut(Axis(0), channel_idx)
+            .assign(&restored);
     }
 
     Ok(output)
@@ -361,6 +360,7 @@ fn restore_channel(
     otf: &Transfer2D,
     config: &InverseFilter,
     mode: Mode,
+    cache: &mut PlanCache,
 ) -> Result<Array2<f32>> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
@@ -371,10 +371,9 @@ fn restore_channel(
 
     let (height, width) = input.dim();
     let padded = pad_to_dims(input, otf.dims())?;
-    let mut cache = PlanCache::new();
-    let mut spectrum = fft2_forward_real(&padded, &mut cache)?;
+    let mut spectrum = fft2_forward_real(&padded, cache)?;
     invert_spectrum(&mut spectrum, otf.as_array(), config, mode)?;
-    let restored = fft2_inverse_complex(&spectrum, &mut cache)?;
+    let restored = fft2_inverse_complex(&spectrum, cache)?;
     let mut cropped = Array2::zeros((height, width));
     for y in 0..height {
         for x in 0..width {
@@ -391,6 +390,7 @@ fn restore_channel_regularized(
     lambda: f32,
     stabilization_floor: f32,
     range_policy: RangePolicy,
+    cache: &mut PlanCache,
 ) -> Result<Array2<f32>> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
@@ -401,8 +401,7 @@ fn restore_channel_regularized(
 
     let (height, width) = input.dim();
     let padded = pad_to_dims(input, blur_transfer.dim())?;
-    let mut cache = PlanCache::new();
-    let mut spectrum = fft2_forward_real(&padded, &mut cache)?;
+    let mut spectrum = fft2_forward_real(&padded, cache)?;
     apply_regularized_inverse(
         &mut spectrum,
         blur_transfer,
@@ -410,7 +409,7 @@ fn restore_channel_regularized(
         lambda,
         stabilization_floor,
     )?;
-    let restored = fft2_inverse_complex(&spectrum, &mut cache)?;
+    let restored = fft2_inverse_complex(&spectrum, cache)?;
 
     let mut cropped = Array2::zeros((height, width));
     for y in 0..height {

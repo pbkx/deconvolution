@@ -1,5 +1,8 @@
 use image::DynamicImage;
-use ndarray::{Array3, Axis};
+use ndarray::{Array2, Array3, Axis};
+
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
 
 use super::convert::{
     array2_to_dynamic, dynamic_to_array2, kernel3_to_projected_kernel2, validate_array3,
@@ -111,20 +114,43 @@ fn run_slicewise_image_only<F>(
     run: F,
 ) -> Result<Array3<f32>>
 where
-    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<DynamicImage>,
+    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<DynamicImage> + Sync,
 {
     validate_array3(volume)?;
     let (depth, height, width) = volume.dim();
-    let mut output = Array3::zeros((depth, height, width));
 
-    for z in 0..depth {
-        let slice = volume.index_axis(Axis(0), z).to_owned();
-        let input = array2_to_dynamic(&slice)?;
-        let restored = run(&input, psf)?;
-        let restored = dynamic_to_array2(&restored)?;
-        if restored.dim() != (height, width) {
-            return Err(Error::DimensionMismatch);
-        }
+    #[cfg(feature = "rayon")]
+    let slices: Vec<Result<(usize, Array2<f32>)>> = (0..depth)
+        .into_par_iter()
+        .map(|z| {
+            let slice = volume.index_axis(Axis(0), z).to_owned();
+            let input = array2_to_dynamic(&slice)?;
+            let restored = run(&input, psf)?;
+            let restored = dynamic_to_array2(&restored)?;
+            if restored.dim() != (height, width) {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok((z, restored))
+        })
+        .collect();
+
+    #[cfg(not(feature = "rayon"))]
+    let slices: Vec<Result<(usize, Array2<f32>)>> = (0..depth)
+        .map(|z| {
+            let slice = volume.index_axis(Axis(0), z).to_owned();
+            let input = array2_to_dynamic(&slice)?;
+            let restored = run(&input, psf)?;
+            let restored = dynamic_to_array2(&restored)?;
+            if restored.dim() != (height, width) {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok((z, restored))
+        })
+        .collect();
+
+    let mut output = Array3::zeros((depth, height, width));
+    for item in slices {
+        let (z, restored) = item?;
         output.index_axis_mut(Axis(0), z).assign(&restored);
     }
 
@@ -137,25 +163,52 @@ fn run_slicewise_report<F>(
     run: F,
 ) -> Result<(Array3<f32>, SolveReport)>
 where
-    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<(DynamicImage, SolveReport)>,
+    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<(DynamicImage, SolveReport)> + Sync,
 {
     validate_array3(volume)?;
     let (depth, height, width) = volume.dim();
-    let mut output = Array3::zeros((depth, height, width));
-    let mut reports = Vec::with_capacity(depth);
 
-    for z in 0..depth {
-        let slice = volume.index_axis(Axis(0), z).to_owned();
-        let input = array2_to_dynamic(&slice)?;
-        let (restored, report) = run(&input, psf)?;
-        let restored = dynamic_to_array2(&restored)?;
-        if restored.dim() != (height, width) {
-            return Err(Error::DimensionMismatch);
-        }
+    #[cfg(feature = "rayon")]
+    let slices: Vec<Result<(usize, Array2<f32>, SolveReport)>> = (0..depth)
+        .into_par_iter()
+        .map(|z| {
+            let slice = volume.index_axis(Axis(0), z).to_owned();
+            let input = array2_to_dynamic(&slice)?;
+            let (restored, report) = run(&input, psf)?;
+            let restored = dynamic_to_array2(&restored)?;
+            if restored.dim() != (height, width) {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok((z, restored, report))
+        })
+        .collect();
+
+    #[cfg(not(feature = "rayon"))]
+    let slices: Vec<Result<(usize, Array2<f32>, SolveReport)>> = (0..depth)
+        .map(|z| {
+            let slice = volume.index_axis(Axis(0), z).to_owned();
+            let input = array2_to_dynamic(&slice)?;
+            let (restored, report) = run(&input, psf)?;
+            let restored = dynamic_to_array2(&restored)?;
+            if restored.dim() != (height, width) {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok((z, restored, report))
+        })
+        .collect();
+
+    let mut output = Array3::zeros((depth, height, width));
+    let mut reports: Vec<Option<SolveReport>> = (0..depth).map(|_| None).collect();
+    for item in slices {
+        let (z, restored, report) = item?;
         output.index_axis_mut(Axis(0), z).assign(&restored);
-        reports.push(report);
+        reports[z] = Some(report);
     }
 
+    let reports: Vec<SolveReport> = reports
+        .into_iter()
+        .map(|report| report.ok_or(Error::InvalidParameter))
+        .collect::<Result<Vec<_>>>()?;
     let report = combine_reports(&reports)?;
     Ok((output, report))
 }
