@@ -73,7 +73,7 @@ fn prelude_reexports_compile() {
 }
 
 #[test]
-fn pr05_public_items_compile_and_behave() {
+fn public_items_compile_and_behave() {
     let stop_reason = StopReason::RelativeUpdate;
     let report = SolveReport {
         iterations: 3,
