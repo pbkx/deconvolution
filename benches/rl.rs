@@ -1,9 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
-use deconvolution::{
+use deconvolution::iterative::{
     richardson_lucy_tv_with, richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
 };
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

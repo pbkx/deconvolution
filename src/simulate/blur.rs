@@ -3,8 +3,10 @@ use num_complex::Complex32;
 
 use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
 use crate::core::plan_cache::PlanCache;
-use crate::otf::{psf2otf, Transfer2D};
-use crate::psf::{validate, Kernel2D};
+use crate::otf::convert::psf2otf;
+use crate::otf::Transfer2D;
+use crate::psf::support::validate;
+use crate::psf::Kernel2D;
 use crate::simulate::noise::{add_gaussian_noise, add_poisson_noise, add_readout_noise};
 use crate::{Error, Result};
 

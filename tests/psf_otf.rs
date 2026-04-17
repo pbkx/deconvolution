@@ -1,16 +1,24 @@
+use deconvolution::otf::convert::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d};
+use deconvolution::otf::spectra::{defocus_otf, koehler_otf};
+use deconvolution::psf::basic::{
+    box2d, box3d, defocus, delta2d, delta3d, disk, gaussian2d, gaussian3d, motion_linear,
+    oriented_gaussian, pillbox,
+};
+use deconvolution::psf::init::{from_support, gaussian_guess, motion_guess, uniform};
+use deconvolution::psf::microscopy::{
+    astigmatic, born_wolf, double_helix, gibson_lanni, lorentz2d, richards_wolf,
+    variable_ri_gibson_lanni, BornWolfParams, GibsonLanniParams, RichardsWolfParams,
+    VariableRiGibsonLanniParams,
+};
+use deconvolution::psf::support::{
+    center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,
+    pad_to_3d, support_mask, support_mask_3d, validate, validate_3d,
+};
+use deconvolution::simulate::blur::{blur, blur_otf};
+use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::{
-    otf::{defocus_otf, koehler_otf, otf2psf, otf2psf_3d, psf2otf, psf2otf_3d},
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
-    psf::{
-        astigmatic, born_wolf, box2d, box3d, center, center_3d, crop_to, crop_to_3d, defocus,
-        delta2d, delta3d, disk, double_helix, flip, flip_3d, from_support, gaussian2d, gaussian3d,
-        gaussian_guess, gibson_lanni, lorentz2d, motion_guess, motion_linear, normalize,
-        normalize_3d, oriented_gaussian, pad_to, pad_to_3d, pillbox, richards_wolf, support_mask,
-        support_mask_3d, uniform, validate, validate_3d, variable_ri_gibson_lanni, BornWolfParams,
-        GibsonLanniParams, RichardsWolfParams, VariableRiGibsonLanniParams,
-    },
     psf::{Blur2D, Blur3D},
-    simulate::{blur, blur_otf, checkerboard_2d},
     Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
 };
 use ndarray::{array, Array2};

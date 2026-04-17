@@ -7,7 +7,7 @@ use crate::core::fft::{
 use crate::core::operator::{LinearOperator2D, LinearOperator3D};
 use crate::core::plan_cache::PlanCache;
 use crate::core::validate::{finite_real_2d, finite_real_3d};
-use crate::otf::psf2otf;
+use crate::otf::convert::psf2otf;
 use crate::otf::{Transfer2D, Transfer3D};
 use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Error, Result};

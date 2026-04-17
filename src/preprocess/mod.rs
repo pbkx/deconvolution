@@ -1,11 +1,11 @@
-mod apodize;
+pub mod apodize;
 mod boundary;
-mod edgetaper;
-mod estimate;
-mod normalize;
+pub mod edgetaper;
+pub mod estimate;
+pub mod normalize;
 mod padding;
 
-pub use apodize::{apodize, window_edges};
+pub use apodize::apodize;
 pub use edgetaper::edgetaper;
 pub use estimate::estimate_nsr;
 pub use normalize::normalize_range;

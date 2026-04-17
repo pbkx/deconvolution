@@ -9,7 +9,8 @@ use crate::core::operator::{inner_product_2d, LinearOperator2D};
 use crate::core::projections::project_nonnegative_2d;
 use crate::core::stopping::{check_stop, StopCriteria};
 use crate::preprocess::normalize_range;
-use crate::psf::{validate, Kernel2D};
+use crate::psf::support::validate;
+use crate::psf::Kernel2D;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]

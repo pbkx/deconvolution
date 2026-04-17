@@ -2,10 +2,12 @@ use image::DynamicImage;
 use ndarray::Array2;
 
 use super::convert::{array2_to_dynamic, dynamic_to_array2, kernel2_from_array};
-use crate::{
-    Bvls, Cgls, Fista, Hybr, Ictm, Ista, Landweber, Mrnsd, Nnls, Result, RichardsonLucy,
-    RichardsonLucyTv, SolveReport, TikhonovMiller, UnsupervisedWiener, VanCittert, Wiener, Wpl,
+use crate::iterative::{
+    Ictm, Landweber, RichardsonLucy, RichardsonLucyTv, TikhonovMiller, VanCittert,
 };
+use crate::optimization::{Bvls, Cgls, Fista, Hybr, Ista, Mrnsd, Nnls, Wpl};
+use crate::spectral::{UnsupervisedWiener, Wiener};
+use crate::{iterative, optimization, spectral, Result, SolveReport};
 
 pub fn wiener(image: &Array2<f32>, psf: &Array2<f32>) -> Result<Array2<f32>> {
     wiener_with(image, psf, &Wiener::new())
@@ -13,7 +15,7 @@ pub fn wiener(image: &Array2<f32>, psf: &Array2<f32>) -> Result<Array2<f32>> {
 
 pub fn wiener_with(image: &Array2<f32>, psf: &Array2<f32>, config: &Wiener) -> Result<Array2<f32>> {
     run_image_only(image, psf, |input, kernel| {
-        crate::wiener_with(input, kernel, config)
+        spectral::wiener_with(input, kernel, config)
     })
 }
 
@@ -30,7 +32,7 @@ pub fn unsupervised_wiener_with(
     config: &UnsupervisedWiener,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::unsupervised_wiener_with(input, kernel, config)
+        spectral::unsupervised_wiener_with(input, kernel, config)
     })
 }
 
@@ -47,7 +49,7 @@ pub fn richardson_lucy_with(
     config: &RichardsonLucy,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::richardson_lucy_with(input, kernel, config)
+        iterative::richardson_lucy_with(input, kernel, config)
     })
 }
 
@@ -64,7 +66,7 @@ pub fn richardson_lucy_tv_with(
     config: &RichardsonLucyTv,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::richardson_lucy_tv_with(input, kernel, config)
+        iterative::richardson_lucy_tv_with(input, kernel, config)
     })
 }
 
@@ -78,7 +80,7 @@ pub fn landweber_with(
     config: &Landweber,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::landweber_with(input, kernel, config)
+        iterative::landweber_with(input, kernel, config)
     })
 }
 
@@ -92,7 +94,7 @@ pub fn van_cittert_with(
     config: &VanCittert,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::van_cittert_with(input, kernel, config)
+        iterative::van_cittert_with(input, kernel, config)
     })
 }
 
@@ -109,7 +111,7 @@ pub fn tikhonov_miller_with(
     config: &TikhonovMiller,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::tikhonov_miller_with(input, kernel, config)
+        iterative::tikhonov_miller_with(input, kernel, config)
     })
 }
 
@@ -123,7 +125,7 @@ pub fn ictm_with(
     config: &Ictm,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::ictm_with(input, kernel, config)
+        iterative::ictm_with(input, kernel, config)
     })
 }
 
@@ -137,7 +139,7 @@ pub fn nnls_with(
     config: &Nnls,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::nnls_with(input, kernel, config)
+        optimization::nnls_with(input, kernel, config)
     })
 }
 
@@ -151,7 +153,7 @@ pub fn bvls_with(
     config: &Bvls,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::bvls_with(input, kernel, config)
+        optimization::bvls_with(input, kernel, config)
     })
 }
 
@@ -165,7 +167,7 @@ pub fn ista_with(
     config: &Ista,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::ista_with(input, kernel, config)
+        optimization::ista_with(input, kernel, config)
     })
 }
 
@@ -179,7 +181,7 @@ pub fn fista_with(
     config: &Fista,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::fista_with(input, kernel, config)
+        optimization::fista_with(input, kernel, config)
     })
 }
 
@@ -193,7 +195,7 @@ pub fn mrnsd_with(
     config: &Mrnsd,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::mrnsd_with(input, kernel, config)
+        optimization::mrnsd_with(input, kernel, config)
     })
 }
 
@@ -207,7 +209,7 @@ pub fn cgls_with(
     config: &Cgls,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::cgls_with(input, kernel, config)
+        optimization::cgls_with(input, kernel, config)
     })
 }
 
@@ -221,7 +223,7 @@ pub fn wpl_with(
     config: &Wpl,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::wpl_with(input, kernel, config)
+        optimization::wpl_with(input, kernel, config)
     })
 }
 
@@ -235,7 +237,7 @@ pub fn hybr_with(
     config: &Hybr,
 ) -> Result<(Array2<f32>, SolveReport)> {
     run_image_report(image, psf, |input, kernel| {
-        crate::hybr_with(input, kernel, config)
+        optimization::hybr_with(input, kernel, config)
     })
 }
 

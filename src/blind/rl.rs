@@ -5,8 +5,10 @@ use crate::core::color::{sample_from_f32, sample_to_f32};
 use crate::core::projections::project_nonnegative_2d;
 use crate::core::stopping::{check_stop, StopCriteria};
 use crate::core::validate::finite_real_2d;
-use crate::psf::{apply_constraints, flip, validate, Kernel2D, PsfConstraint};
-use crate::simulate::blur;
+use crate::psf::constraints::apply_constraints;
+use crate::psf::support::{flip, validate};
+use crate::psf::{Kernel2D, PsfConstraint};
+use crate::simulate::blur::blur;
 use crate::{Error, Result, StopReason};
 
 use super::{BlindOutput, BlindReport};

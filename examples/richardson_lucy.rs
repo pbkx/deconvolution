@@ -1,6 +1,8 @@
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
-use deconvolution::{richardson_lucy_with, RichardsonLucy};
+use deconvolution::iterative::{richardson_lucy_with, RichardsonLucy};
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

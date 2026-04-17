@@ -1,6 +1,10 @@
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_gaussian_noise, blur, checkerboard_2d};
-use deconvolution::{regularized_inverse_filter_with, RegOperator2D, RegularizedInverseFilter};
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_gaussian_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
+use deconvolution::spectral::{
+    regularized_inverse_filter_with, RegOperator2D, RegularizedInverseFilter,
+};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::{array, Array2};
 

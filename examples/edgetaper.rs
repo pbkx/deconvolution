@@ -1,8 +1,8 @@
 use std::env;
 
 use deconvolution::preprocess::edgetaper;
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::checkerboard_2d;
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

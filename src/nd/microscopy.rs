@@ -7,10 +7,10 @@ use rayon::prelude::*;
 use super::convert::{
     array2_to_dynamic, dynamic_to_array2, kernel3_to_projected_kernel2, validate_array3,
 };
-use crate::{
-    Cmle, Error, Gmle, Qmle, Result, RichardsonLucy, RichardsonLucyTv, SolveReport, StopReason,
-    Wiener,
-};
+use crate::iterative::{self, RichardsonLucy, RichardsonLucyTv};
+use crate::optimization::{self, Cmle, Gmle, Qmle};
+use crate::spectral::{self, Wiener};
+use crate::{Error, Result, SolveReport, StopReason};
 
 pub fn wiener(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<Array3<f32>> {
     wiener_with(volume, psf, &Wiener::new())
@@ -23,7 +23,7 @@ pub fn wiener_with(
 ) -> Result<Array3<f32>> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_image_only(volume, &kernel, |slice, psf| {
-        crate::wiener_with(slice, psf, config)
+        spectral::wiener_with(slice, psf, config)
     })
 }
 
@@ -41,7 +41,7 @@ pub fn richardson_lucy_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        crate::richardson_lucy_with(slice, psf, config)
+        iterative::richardson_lucy_with(slice, psf, config)
     })
 }
 
@@ -59,7 +59,7 @@ pub fn richardson_lucy_tv_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        crate::richardson_lucy_tv_with(slice, psf, config)
+        iterative::richardson_lucy_tv_with(slice, psf, config)
     })
 }
 
@@ -74,7 +74,7 @@ pub fn cmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        crate::cmle_with(slice, psf, config)
+        optimization::cmle_with(slice, psf, config)
     })
 }
 
@@ -89,7 +89,7 @@ pub fn gmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        crate::gmle_with(slice, psf, config)
+        optimization::gmle_with(slice, psf, config)
     })
 }
 
@@ -104,7 +104,7 @@ pub fn qmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        crate::qmle_with(slice, psf, config)
+        optimization::qmle_with(slice, psf, config)
     })
 }
 

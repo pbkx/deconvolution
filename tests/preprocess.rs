@@ -1,4 +1,5 @@
-use deconvolution::preprocess::{apodize, edgetaper, estimate_nsr, normalize_range, window_edges};
+use deconvolution::preprocess::apodize::window_edges;
+use deconvolution::preprocess::{apodize, edgetaper, estimate_nsr, normalize_range};
 use deconvolution::{Kernel2D, RangePolicy};
 use ndarray::{array, Array2};
 

@@ -1,17 +1,19 @@
 mod common;
 
-use deconvolution::otf::psf2otf;
-use deconvolution::psf::{delta2d, gaussian2d, motion_linear};
-use deconvolution::simulate::{
-    add_gaussian_noise, add_poisson_noise, add_readout_noise, blur, blur_otf, checkerboard_2d,
-    degrade, gaussian_blob_2d, phantom_3d, rgb_edges_2d,
+use deconvolution::otf::convert::psf2otf;
+use deconvolution::psf::basic::{delta2d, gaussian2d, motion_linear};
+use deconvolution::simulate::blur::{blur, blur_otf, degrade};
+use deconvolution::simulate::noise::{add_gaussian_noise, add_poisson_noise, add_readout_noise};
+use deconvolution::simulate::phantom::{
+    checkerboard_2d, gaussian_blob_2d, phantom_3d, rgb_edges_2d,
 };
-use deconvolution::{
+use deconvolution::spectral::{
     inverse_filter, inverse_filter_with, naive_inverse_filter, regularized_inverse_filter_with,
     tikhonov_inverse_filter_with, truncated_inverse_filter_with, unsupervised_wiener,
-    unsupervised_wiener_with, wiener, wiener_with, InverseFilter, Padding, RegOperator2D,
-    RegularizedInverseFilter, TikhonovInverseFilter, Transfer2D, UnsupervisedWiener, Wiener,
+    unsupervised_wiener_with, wiener, wiener_with, InverseFilter, RegOperator2D,
+    RegularizedInverseFilter, TikhonovInverseFilter, UnsupervisedWiener, Wiener,
 };
+use deconvolution::{Padding, Transfer2D};
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 use ndarray::{array, Array2};
 use num_complex::Complex32;

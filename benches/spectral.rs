@@ -1,7 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_gaussian_noise, blur, checkerboard_2d};
-use deconvolution::{unsupervised_wiener_with, wiener_with, UnsupervisedWiener, Wiener};
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_gaussian_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
+use deconvolution::spectral::{unsupervised_wiener_with, wiener_with, UnsupervisedWiener, Wiener};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

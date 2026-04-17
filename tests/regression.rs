@@ -1,14 +1,16 @@
 mod common;
 
+use deconvolution::iterative::{richardson_lucy_with, RichardsonLucy};
 use deconvolution::nd;
-use deconvolution::otf::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d};
-use deconvolution::psf::{gaussian2d, gaussian3d, Kernel3D};
-use deconvolution::simulate::{
-    add_poisson_noise, blur, checkerboard_2d, gaussian_blob_2d, phantom_3d,
-};
-use deconvolution::{
-    qmle_with, richardson_lucy_with, wiener_with, Cmle, Error, Gmle, Qmle, RichardsonLucy, Wiener,
-};
+use deconvolution::optimization::{cmle_with, gmle_with, qmle_with, Cmle, Gmle, Qmle};
+use deconvolution::otf::convert::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d};
+use deconvolution::psf::basic::{gaussian2d, gaussian3d};
+use deconvolution::psf::Kernel3D;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::{checkerboard_2d, gaussian_blob_2d, phantom_3d};
+use deconvolution::spectral::{wiener_with, Wiener};
+use deconvolution::Error;
 use image::{DynamicImage, Rgba, RgbaImage};
 use ndarray::{Array3, Axis};
 
@@ -74,9 +76,8 @@ fn finite_output_and_shape_preservation_hold_for_mle_matrix() {
     let degraded_image = DynamicImage::ImageLuma8(array_to_gray(&degraded).unwrap());
 
     let (cmle_out, _) =
-        deconvolution::cmle_with(&degraded_image, &psf, &Cmle::new().iterations(18).snr(18.0))
-            .unwrap();
-    let (gmle_out, _) = deconvolution::gmle_with(
+        cmle_with(&degraded_image, &psf, &Cmle::new().iterations(18).snr(18.0)).unwrap();
+    let (gmle_out, _) = gmle_with(
         &degraded_image,
         &psf,
         &Gmle::new()
@@ -86,7 +87,7 @@ fn finite_output_and_shape_preservation_hold_for_mle_matrix() {
             .acuity(0.85),
     )
     .unwrap();
-    let (qmle_out, _) = deconvolution::qmle_with(
+    let (qmle_out, _) = qmle_with(
         &degraded_image,
         &psf,
         &Qmle::new().iterations(9).snr(60.0).acuity(1.1),
@@ -154,7 +155,7 @@ fn nd_volume_regression_metrics_hold() {
     let blurred = blur_volume_slicewise(&sharp, &projected).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 14.0, 2223).unwrap();
 
-    let (restored, report) = nd::qmle_with(
+    let (restored, report) = nd::microscopy::qmle_with(
         &degraded,
         psf_3d.as_array(),
         &Qmle::new().iterations(9).snr(60.0).acuity(1.1),

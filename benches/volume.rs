@@ -1,8 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use deconvolution::nd;
-use deconvolution::psf::gaussian3d;
-use deconvolution::simulate::{blur, phantom_3d};
-use deconvolution::Qmle;
+use deconvolution::optimization::Qmle;
+use deconvolution::psf::basic::gaussian3d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::phantom::phantom_3d;
 use ndarray::{Array3, Axis};
 
 fn bench_volume(c: &mut Criterion) {
@@ -11,8 +12,9 @@ fn bench_volume(c: &mut Criterion) {
 
     c.bench_function("volume_qmle", |b| {
         b.iter(|| {
-            let _ = nd::qmle_with(black_box(&volume), black_box(&psf), black_box(&config))
-                .expect("nd_qmle");
+            let _ =
+                nd::microscopy::qmle_with(black_box(&volume), black_box(&psf), black_box(&config))
+                    .expect("nd_qmle");
         });
     });
 }

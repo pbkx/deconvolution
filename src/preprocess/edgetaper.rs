@@ -3,7 +3,8 @@ use std::f32::consts::FRAC_PI_2;
 use ndarray::Array2;
 
 use crate::preprocess::padding::convolve_same_2d;
-use crate::psf::{normalize, validate, Kernel2D};
+use crate::psf::support::{normalize, validate};
+use crate::psf::Kernel2D;
 use crate::{Boundary, Error, Result};
 
 pub fn edgetaper(input: &Array2<f32>, psf: &Kernel2D) -> Result<Array2<f32>> {

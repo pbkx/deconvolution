@@ -7,11 +7,14 @@ use crate::core::convert::PlanarImage;
 use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
 use crate::core::plan_cache::PlanCache;
 use crate::core::regularizer::spectral_response_2d;
+use crate::core::regularizer::RegOperator2D;
 use crate::core::util::next_fast_len;
-use crate::otf::{psf2otf, Transfer2D};
+use crate::otf::convert::psf2otf;
+use crate::otf::Transfer2D;
 use crate::preprocess::normalize_range;
-use crate::psf::{validate, Kernel2D};
-use crate::{Error, Padding, RangePolicy, RegOperator2D, Result};
+use crate::psf::support::validate;
+use crate::psf::Kernel2D;
+use crate::{Error, Padding, RangePolicy, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InverseFilter {

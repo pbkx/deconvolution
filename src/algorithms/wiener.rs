@@ -7,9 +7,11 @@ use crate::core::convert::PlanarImage;
 use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
 use crate::core::plan_cache::PlanCache;
 use crate::core::util::next_fast_len;
-use crate::otf::{psf2otf, Transfer2D};
+use crate::otf::convert::psf2otf;
+use crate::otf::Transfer2D;
 use crate::preprocess::normalize_range;
-use crate::psf::{validate, Kernel2D};
+use crate::psf::support::validate;
+use crate::psf::Kernel2D;
 use crate::{Boundary, ChannelMode, Error, Padding, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]

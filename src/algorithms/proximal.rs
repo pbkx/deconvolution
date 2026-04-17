@@ -10,7 +10,8 @@ use crate::core::projections::project_nonnegative_2d;
 use crate::core::stopping::{check_stop, StopCriteria};
 use crate::core::validate::finite_real_2d;
 use crate::preprocess::normalize_range;
-use crate::psf::{validate, Kernel2D};
+use crate::psf::support::validate;
+use crate::psf::Kernel2D;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 pub(crate) fn tv_regularize_step_2d(

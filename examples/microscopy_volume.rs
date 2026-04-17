@@ -1,7 +1,8 @@
 use deconvolution::nd::microscopy::qmle_with;
-use deconvolution::psf::gaussian3d;
-use deconvolution::simulate::{blur, phantom_3d};
-use deconvolution::Qmle;
+use deconvolution::optimization::Qmle;
+use deconvolution::psf::basic::gaussian3d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::phantom::phantom_3d;
 use ndarray::{Array3, Axis};
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {

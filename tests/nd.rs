@@ -1,10 +1,13 @@
+use deconvolution::iterative::{richardson_lucy_with, RichardsonLucy};
 use deconvolution::nd;
-use deconvolution::psf::{gaussian2d, gaussian3d, motion_linear, uniform};
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d, phantom_3d};
-use deconvolution::{
-    blind::BlindRichardsonLucy, richardson_lucy_with, wiener_with, Cmle, Error, Gmle, Kernel2D,
-    Qmle, Result, RichardsonLucy, Wiener,
-};
+use deconvolution::optimization::{Cmle, Gmle, Qmle};
+use deconvolution::psf::basic::{gaussian2d, gaussian3d, motion_linear};
+use deconvolution::psf::init::uniform;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::{checkerboard_2d, phantom_3d};
+use deconvolution::spectral::{wiener_with, Wiener};
+use deconvolution::{blind::BlindRichardsonLucy, Error, Kernel2D, Result};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::{Array2, Array3, Axis};
 
@@ -56,7 +59,7 @@ fn nd_and_image_paths_agree_on_2d_grayscale() {
     let config = Wiener::new().nsr(1e-2);
 
     let restored_image = wiener_with(&degraded_image, &psf, &config).unwrap();
-    let restored_nd = nd::wiener_with(&degraded, psf.as_array(), &config).unwrap();
+    let restored_nd = nd::known_psf::wiener_with(&degraded, psf.as_array(), &config).unwrap();
     let restored_image_array = gray_to_array(&restored_image.to_luma8());
 
     let max_diff = max_abs_diff_2d(&restored_image_array, &restored_nd).unwrap();
@@ -71,7 +74,7 @@ fn nd_and_image_paths_agree_on_2d_grayscale() {
             .collect_history(true),
     )
     .unwrap();
-    let (restored_nd_rl, report_nd_rl) = nd::richardson_lucy_with(
+    let (restored_nd_rl, report_nd_rl) = nd::known_psf::richardson_lucy_with(
         &degraded,
         psf.as_array(),
         &RichardsonLucy::new()
@@ -117,13 +120,13 @@ fn nd_mle_family_improves_on_microscopy_volume_fixture() {
     let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 22.0, 9021).unwrap();
 
-    let (cmle_restored, cmle_report) = nd::cmle_with(
+    let (cmle_restored, cmle_report) = nd::microscopy::cmle_with(
         &degraded,
         psf_3d.as_array(),
         &Cmle::new().iterations(18).snr(22.0).acuity(1.0),
     )
     .unwrap();
-    let (gmle_restored, gmle_report) = nd::gmle_with(
+    let (gmle_restored, gmle_report) = nd::microscopy::gmle_with(
         &degraded,
         psf_3d.as_array(),
         &Gmle::new()
@@ -133,7 +136,7 @@ fn nd_mle_family_improves_on_microscopy_volume_fixture() {
             .roughness(1.1),
     )
     .unwrap();
-    let (qmle_restored, qmle_report) = nd::qmle_with(
+    let (qmle_restored, qmle_report) = nd::microscopy::qmle_with(
         &degraded,
         psf_3d.as_array(),
         &Qmle::new().iterations(9).snr(60.0).acuity(1.1),
@@ -165,13 +168,13 @@ fn nd_gmle_is_not_worse_than_nd_cmle_on_high_noise_volume() {
     let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 7.0, 12303).unwrap();
 
-    let (cmle_restored, _) = nd::cmle_with(
+    let (cmle_restored, _) = nd::microscopy::cmle_with(
         &degraded,
         psf_3d.as_array(),
         &Cmle::new().iterations(22).snr(8.0).acuity(1.15),
     )
     .unwrap();
-    let (gmle_restored, _) = nd::gmle_with(
+    let (gmle_restored, _) = nd::microscopy::gmle_with(
         &degraded,
         psf_3d.as_array(),
         &Gmle::new()

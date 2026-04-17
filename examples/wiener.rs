@@ -1,8 +1,9 @@
 use std::env;
 
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{blur, checkerboard_2d};
-use deconvolution::{wiener_with, Wiener};
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::phantom::checkerboard_2d;
+use deconvolution::spectral::{wiener_with, Wiener};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

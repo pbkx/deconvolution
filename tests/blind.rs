@@ -3,10 +3,13 @@ use deconvolution::blind::{
     richardson_lucy_with, BlindMaximumLikelihood, BlindOutput, BlindParametric, BlindReport,
     BlindRichardsonLucy, ParametricPsf,
 };
-use deconvolution::psf::{
-    apply_constraint, apply_constraints, motion_linear, uniform, PsfConstraint,
-};
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
+use deconvolution::psf::basic::motion_linear;
+use deconvolution::psf::constraints::{apply_constraint, apply_constraints};
+use deconvolution::psf::init::uniform;
+use deconvolution::psf::PsfConstraint;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::{Error, Kernel2D, StopReason};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::{array, Array2};

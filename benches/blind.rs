@@ -1,7 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use deconvolution::blind::{richardson_lucy_with, BlindRichardsonLucy};
-use deconvolution::psf::{motion_linear, uniform};
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d};
+use deconvolution::psf::basic::motion_linear;
+use deconvolution::psf::init::uniform;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

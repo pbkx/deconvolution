@@ -1,40 +1,39 @@
 #![forbid(unsafe_code)]
 
+//! Deconvolution toolkit with an image-first API and ndarray expert workflows.
+//!
+//! Module organization:
+//! - [`spectral`]: frequency-domain inverse and Wiener-family methods.
+//! - [`iterative`]: Richardson-Lucy and iterative restoration methods.
+//! - [`optimization`]: constrained, proximal, Krylov, and MLE-related solvers.
+//! - [`blind`]: blind deconvolution workflows.
+//! - [`psf`]: kernels and PSF generation/utilities.
+//! - [`otf`]: transfer-function conversions and spectra.
+//! - [`preprocess`]: edge tapering, NSR estimation, and normalization.
+//! - [`simulate`]: blur, noise, and phantom generation.
+//! - [`nd`]: ndarray and N-dimensional workflows.
+
 mod algorithms;
 mod core;
 
 pub mod blind;
 pub mod error;
+pub mod iterative;
 pub mod nd;
+pub mod optimization;
 pub mod otf;
 pub mod prelude;
 pub mod preprocess;
 pub mod psf;
 pub mod simulate;
+pub mod spectral;
 pub mod traits;
 
-pub use crate::blind::{
-    BlindMaximumLikelihood, BlindOutput, BlindParametric, BlindReport, BlindRichardsonLucy,
-    ParametricPsf,
-};
 pub use crate::core::diagnostics::SolveReport;
-pub use crate::core::regularizer::{RegOperator2D, RegOperator3D};
 pub use crate::core::stopping::StopReason;
 pub use crate::error::{Error, Result};
+pub use crate::iterative::{richardson_lucy, RichardsonLucy};
 pub use crate::otf::{Transfer2D, Transfer3D};
 pub use crate::psf::{Kernel2D, Kernel3D};
+pub use crate::spectral::{wiener, Wiener};
 pub use crate::traits::{Boundary, ChannelMode, Padding, RangePolicy};
-pub use algorithms::{
-    bvls, bvls_with, cgls, cgls_with, cmle, cmle_with, damped_richardson_lucy,
-    damped_richardson_lucy_with, fista, fista_with, gmle, gmle_with, hybr, hybr_with, ictm,
-    ictm_with, inverse_filter, inverse_filter_with, ista, ista_with, landweber, landweber_with,
-    mrnsd, mrnsd_with, naive_inverse_filter, naive_inverse_filter_with, nnls, nnls_with, qmle,
-    qmle_with, regularized_inverse_filter, regularized_inverse_filter_with, richardson_lucy,
-    richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_inverse_filter,
-    tikhonov_inverse_filter_with, tikhonov_miller, tikhonov_miller_with, truncated_inverse_filter,
-    truncated_inverse_filter_with, unsupervised_wiener, unsupervised_wiener_with, van_cittert,
-    van_cittert_with, wiener, wiener_with, wpl, wpl_with, Bvls, Cgls, Cmle, Fista, Gmle, Hybr,
-    Ictm, InverseFilter, Ista, Landweber, Mrnsd, Nnls, Qmle, RegularizedInverseFilter,
-    RichardsonLucy, RichardsonLucyTv, SparseBasis, TikhonovInverseFilter, TikhonovMiller,
-    UnsupervisedWiener, VanCittert, Wiener, Wpl,
-};

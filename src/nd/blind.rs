@@ -1,8 +1,8 @@
 use ndarray::Array2;
 
 use super::convert::{array2_to_dynamic, dynamic_to_array2, kernel2_from_array};
-use crate::blind::{BlindMaximumLikelihood, BlindRichardsonLucy};
-use crate::{BlindOutput, Result};
+use crate::blind::{BlindMaximumLikelihood, BlindOutput, BlindRichardsonLucy};
+use crate::Result;
 
 pub fn richardson_lucy(
     image: &Array2<f32>,

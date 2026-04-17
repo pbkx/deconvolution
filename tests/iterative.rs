@@ -1,14 +1,18 @@
-use deconvolution::psf::gaussian2d;
-use deconvolution::simulate::{add_poisson_noise, blur, checkerboard_2d, gaussian_blob_2d};
-use deconvolution::{
-    bvls, bvls_with, cgls, cgls_with, cmle, cmle_with, damped_richardson_lucy_with, fista,
-    fista_with, gmle_with, hybr, hybr_with, ictm, ictm_with, ista, ista_with, landweber,
-    landweber_with, mrnsd, mrnsd_with, nnls, nnls_with, qmle, qmle_with, richardson_lucy,
+use deconvolution::iterative::{
+    damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, richardson_lucy,
     richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller,
-    tikhonov_miller_with, van_cittert, van_cittert_with, wpl, wpl_with, Bvls, Cgls, Cmle, Fista,
-    Gmle, Hybr, Ictm, Ista, Landweber, Mrnsd, Nnls, Qmle, RichardsonLucy, RichardsonLucyTv,
-    SparseBasis, TikhonovMiller, VanCittert, Wpl,
+    tikhonov_miller_with, van_cittert, van_cittert_with, Ictm, Landweber, RichardsonLucy,
+    RichardsonLucyTv, TikhonovMiller, VanCittert,
 };
+use deconvolution::optimization::{
+    bvls, bvls_with, cgls, cgls_with, cmle, cmle_with, fista, fista_with, gmle_with, hybr,
+    hybr_with, ista, ista_with, mrnsd, mrnsd_with, nnls, nnls_with, qmle, qmle_with, wpl, wpl_with,
+    Bvls, Cgls, Cmle, Fista, Gmle, Hybr, Ista, Mrnsd, Nnls, Qmle, SparseBasis, Wpl,
+};
+use deconvolution::psf::basic::gaussian2d;
+use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::noise::add_poisson_noise;
+use deconvolution::simulate::phantom::{checkerboard_2d, gaussian_blob_2d};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
 

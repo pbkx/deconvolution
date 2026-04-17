@@ -1,11 +1,11 @@
 use deconvolution::{
     prelude::{
         Boundary as PreludeBoundary, ChannelMode as PreludeChannelMode, Error as PreludeError,
-        Padding as PreludePadding, RangePolicy as PreludeRangePolicy,
-        RegOperator2D as PreludeRegOperator2D, Result as PreludeResult,
+        Padding as PreludePadding, RangePolicy as PreludeRangePolicy, Result as PreludeResult,
         SolveReport as PreludeSolveReport, StopReason as PreludeStopReason,
     },
-    Boundary, ChannelMode, Error, Padding, RangePolicy, RegOperator2D, SolveReport, StopReason,
+    spectral::RegOperator2D,
+    Boundary, ChannelMode, Error, Padding, RangePolicy, SolveReport, StopReason,
 };
 use ndarray::array;
 
@@ -54,7 +54,6 @@ fn prelude_reexports_compile() {
     let range_policy = PreludeRangePolicy::Clamp01;
     let result: PreludeResult<()> = Err(PreludeError::EmptyImage);
     let stop_reason = PreludeStopReason::MaxIterations;
-    let reg_op = PreludeRegOperator2D::Identity;
     let report = PreludeSolveReport {
         iterations: 0,
         stop_reason,
@@ -68,7 +67,6 @@ fn prelude_reexports_compile() {
     assert_eq!(channel_mode, PreludeChannelMode::Independent);
     assert_eq!(range_policy, PreludeRangePolicy::Clamp01);
     assert!(matches!(result, Err(PreludeError::EmptyImage)));
-    assert!(matches!(reg_op, PreludeRegOperator2D::Identity));
     assert_eq!(report.iterations, 0);
 }
 
