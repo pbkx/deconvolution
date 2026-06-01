@@ -4,6 +4,6 @@
 
 | Original | Deconvolved |
 | --- | --- |
-| ![Before deconvolution](before_deconvolution.png) | ![After deconvolution](after_deconvolution.png) |
+| <img src="before_deconvolution.png" alt="Before deconvolution" width="400"> | <img src="after_deconvolution.png" alt="After deconvolution" width="400"> |
 
 _Before (left) is the motion-blurred sample; after (right) is restored using `wiener_with`._
