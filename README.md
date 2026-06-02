@@ -8,17 +8,16 @@
 
 _Before (left) is the motion-blurred sample; after (right) is restored using `wiener_with`._
 
-Image-first rust deconvolution and restoration library.
+Rust image deconvolution and restoration library.
 
 Recovering images from blur depends on a point-spread function, stable
 frequency-domain utilities, and careful regularization. `deconvolution`
 provides known-PSF restoration, blind workflows, PSF/OTF conversion,
-preprocessing helpers, simulation fixtures, and ndarray-facing expert APIs
-without making ndarray the primary user experience.
+preprocessing helpers, simulation fixtures, and ndarray APIs.
 
 ### Overview
 
-- **Image-first API**: Public root workflows operate on `image::DynamicImage`
+- **Image-first API**: Top-level functions operate on `image::DynamicImage`
   and return image buffers suitable for saving or further processing.
 - **Known-PSF restoration**: Includes inverse filters, Wiener-family methods,
   Richardson-Lucy variants, iterative least-squares methods, constrained
@@ -52,7 +51,7 @@ files directly should also depend on `image`:
 cargo add image
 ```
 
-`rayon` is enabled by default and wires through the `ndarray` and `image`
+`rayon` is enabled by default and enables the rayon features on `ndarray` and `image`
 rayon feature flags. Disable default features for a serial build:
 
 ```toml
@@ -361,7 +360,7 @@ default = ["rayon"]
 rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
 ```
 
-Disable default features for serial-only builds:
+Disable default features for serial builds:
 
 ```bash
 cargo test --no-default-features
