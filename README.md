@@ -1,6 +1,6 @@
 # deconvolution
 
-[![crates.io](https://img.shields.io/crates/v/deconvolution.svg)](https://crates.io/crates/deconvolution) [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![crates.io](https://img.shields.io/crates/v/deconvolution.svg)](https://crates.io/crates/deconvolution) [![docs.rs](https://docs.rs/deconvolution/badge.svg)](https://docs.rs/deconvolution) [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 | Original | Deconvolved |
 | --- | --- |
