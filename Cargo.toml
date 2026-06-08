@@ -3,10 +3,22 @@ name = "deconvolution"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
+keywords = ["image", "deconvolution", "deblurring", "restoration", "fft"]
+categories = ["algorithms", "computer-vision", "multimedia::images", "science"]
 license = "MIT"
+description = "Rust image deconvolution and restoration library."
+exclude = [".github/**/*", ".tmp/**/*", "context.md", "SAMPLE.md", "waterfall.png"]
+readme = "README.md"
+documentation = "https://docs.rs/deconvolution"
+repository = "https://github.com/pbkx/deconvolution"
+autobenches = false
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
 
 [dependencies]
-image = { version = "0.25.10", default-features = false, features = ["default-formats"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 ndarray = "0.17.2"
 num-complex = "0.4.6"
 rustfft = "6.4.1"
@@ -14,10 +26,6 @@ thiserror = "2.0.18"
 rayon = { version = "1.11.0", optional = true }
 rand = "0.10.0"
 rand_distr = "0.6.0"
-
-[features]
-default = ["rayon"]
-rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
 
 [dev-dependencies]
 criterion = "0.5.1"
