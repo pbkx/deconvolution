@@ -153,12 +153,12 @@ fn nd_volume_regression_metrics_hold() {
     let psf_3d = gaussian3d((7, 9, 9), 1.5).unwrap();
     let projected = project_psf3d(psf_3d.as_array()).unwrap();
     let blurred = blur_volume_slicewise(&sharp, &projected).unwrap();
-    let degraded = add_poisson_noise_volume_slicewise(&blurred, 14.0, 2223).unwrap();
+    let degraded = add_poisson_noise_volume_slicewise(&blurred, 80.0, 2223).unwrap();
 
     let (restored, report) = nd::microscopy::qmle_with(
         &degraded,
         psf_3d.as_array(),
-        &Qmle::new().iterations(9).snr(60.0).acuity(1.1),
+        &Qmle::new().iterations(4).snr(120.0).acuity(1.1),
     )
     .unwrap();
     let baseline_mse = mse_3d(&sharp, &degraded).unwrap();

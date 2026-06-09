@@ -282,6 +282,29 @@ pub fn ista_with(
     )
 }
 
+pub(crate) fn ista_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Ista,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_proximal_array2(
+        image,
+        psf,
+        ProximalConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            lambda: config.lambda,
+            basis: config.basis,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        ProximalMethod::Ista,
+    )
+}
+
 pub fn fista(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     fista_with(image, psf, &Fista::new())
 }
@@ -292,6 +315,29 @@ pub fn fista_with(
     config: &Fista,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_proximal(
+        image,
+        psf,
+        ProximalConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            lambda: config.lambda,
+            basis: config.basis,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        ProximalMethod::Fista,
+    )
+}
+
+pub(crate) fn fista_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Fista,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_proximal_array2(
         image,
         psf,
         ProximalConfig {
@@ -339,6 +385,39 @@ fn run_proximal(
         step_size,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+fn run_proximal_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: ProximalConfig,
+    method: ProximalMethod,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_config(config)?;
+
+    let normalized_psf = psf.normalized()?;
+    let operator = Convolution2D::new(&normalized_psf)?;
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let step_size = resolve_step_size(config.step_size, &operator, (height, width))?;
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        planar.alpha_denominator(),
+        &operator,
+        config,
+        method,
+        step_size,
+    )?;
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

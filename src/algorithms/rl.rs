@@ -214,6 +214,14 @@ pub fn richardson_lucy_with(
     run_richardson_lucy(image, psf, config, false, Regularization::None)
 }
 
+pub(crate) fn richardson_lucy_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &RichardsonLucy,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_richardson_lucy_array2(image, psf, config, false, Regularization::None)
+}
+
 pub fn damped_richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -249,6 +257,19 @@ pub fn richardson_lucy_tv_with(
     run_richardson_lucy(image, psf, &config.base, false, regularization)
 }
 
+pub(crate) fn richardson_lucy_tv_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &RichardsonLucyTv,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_tv_config(config)?;
+    let regularization = Regularization::Tv {
+        weight: config.tv_weight,
+        epsilon: config.tv_epsilon,
+    };
+    run_richardson_lucy_array2(image, psf, &config.base, false, regularization)
+}
+
 fn run_richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -280,6 +301,40 @@ fn run_richardson_lucy(
         regularization,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+fn run_richardson_lucy_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &RichardsonLucy,
+    force_damping: bool,
+    regularization: Regularization,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    let effective_config = resolve_effective_config(config, force_damping);
+    validate_config(&effective_config)?;
+    validate_regularization(regularization)?;
+
+    let normalized_psf = psf.normalized()?;
+    let op = Convolution2D::new(&normalized_psf)?;
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        planar.alpha_denominator(),
+        &op,
+        &effective_config,
+        regularization,
+    )?;
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

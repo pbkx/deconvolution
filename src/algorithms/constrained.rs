@@ -184,6 +184,26 @@ pub fn nnls_with(
     )
 }
 
+pub(crate) fn nnls_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Nnls,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_constrained_array2(
+        image,
+        psf,
+        ConstrainedConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        Constraint::Nonnegative,
+    )
+}
+
 pub fn bvls(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     bvls_with(image, psf, &Bvls::new())
 }
@@ -194,6 +214,29 @@ pub fn bvls_with(
     config: &Bvls,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_constrained(
+        image,
+        psf,
+        ConstrainedConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        Constraint::Bounds {
+            lower_bound: config.lower_bound,
+            upper_bound: config.upper_bound,
+        },
+    )
+}
+
+pub(crate) fn bvls_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Bvls,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_constrained_array2(
         image,
         psf,
         ConstrainedConfig {
@@ -241,6 +284,39 @@ fn run_constrained(
         step_size,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+fn run_constrained_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: ConstrainedConfig,
+    constraint: Constraint,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_config(config, constraint)?;
+
+    let normalized_psf = psf.normalized()?;
+    let operator = Convolution2D::new(&normalized_psf)?;
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let step_size = resolve_step_size(config.step_size, &operator, (height, width))?;
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        planar.alpha_denominator(),
+        &operator,
+        config,
+        constraint,
+        step_size,
+    )?;
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

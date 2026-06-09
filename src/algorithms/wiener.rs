@@ -210,6 +210,43 @@ pub fn wiener_with(image: &DynamicImage, psf: &Kernel2D, config: &Wiener) -> Res
     rebuild_dynamic_like(image, &restored_color)
 }
 
+pub(crate) fn wiener_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Wiener,
+) -> Result<Array2<f32>> {
+    validate(psf)?;
+    validate_config(config)?;
+
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let fft_dims = resolve_fft_dims((height, width), psf.dims(), config.padding)?;
+    let blur_transfer = psf2otf(psf, fft_dims)?.into_inner();
+    let correlation = resolve_correlation_form(config, fft_dims)?;
+
+    let (restored_color, stats) = restore_color(
+        planar.color(),
+        AlphaData {
+            values: planar.alpha(),
+            denominator: planar.alpha_denominator(),
+        },
+        &blur_transfer,
+        correlation,
+        config,
+    )?;
+    if config.collect_history {
+        validate_stats(&stats)?;
+    }
+
+    PlanarImage::to_array2_gray(&restored_color)
+}
+
 pub fn unsupervised_wiener(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -306,6 +343,98 @@ pub fn unsupervised_wiener_with(
     };
 
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+pub(crate) fn unsupervised_wiener_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &UnsupervisedWiener,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_unsupervised_config(config)?;
+
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let fft_dims = resolve_fft_dims((height, width), psf.dims(), config.padding)?;
+    let blur_transfer = psf2otf(psf, fft_dims)?.into_inner();
+
+    let mut nsr = config.initial_nsr.max(config.min_nsr);
+    let mut objective_history = Vec::with_capacity(config.max_iterations);
+    let mut residual_history = Vec::with_capacity(config.max_iterations);
+    let mut stop_reason = StopReason::MaxIterations;
+    let mut iterations = 0usize;
+
+    for iteration in 0..config.max_iterations {
+        iterations = iteration + 1;
+        let iteration_config = unsupervised_iteration_config(config, nsr, true);
+        let correlation = resolve_correlation_form(&iteration_config, fft_dims)?;
+        let (_, stats) = restore_color(
+            planar.color(),
+            AlphaData {
+                values: planar.alpha(),
+                denominator: planar.alpha_denominator(),
+            },
+            &blur_transfer,
+            correlation,
+            &iteration_config,
+        )?;
+        validate_stats(&stats)?;
+
+        let estimated_nsr = estimate_nsr_from_stats(&stats, config.min_nsr)?;
+        let relative_update = relative_change(nsr, estimated_nsr)?;
+        objective_history.push(estimated_nsr);
+        residual_history.push(relative_update);
+        nsr = estimated_nsr;
+
+        let step = iteration + 1;
+        if step >= config.min_iterations && relative_update <= config.tolerance {
+            stop_reason = StopReason::RelativeUpdate;
+            break;
+        }
+    }
+
+    let final_config = unsupervised_iteration_config(config, nsr, config.collect_history);
+    let correlation = resolve_correlation_form(&final_config, fft_dims)?;
+    let (restored_color, stats) = restore_color(
+        planar.color(),
+        AlphaData {
+            values: planar.alpha(),
+            denominator: planar.alpha_denominator(),
+        },
+        &blur_transfer,
+        correlation,
+        &final_config,
+    )?;
+    if config.collect_history {
+        validate_stats(&stats)?;
+    }
+
+    let objective_history = if config.collect_history {
+        objective_history
+    } else {
+        Vec::new()
+    };
+    let residual_history = if config.collect_history {
+        residual_history
+    } else {
+        Vec::new()
+    };
+    let report = SolveReport {
+        iterations,
+        stop_reason,
+        objective_history,
+        residual_history,
+        estimated_nsr: Some(nsr),
+    };
+
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

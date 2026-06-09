@@ -91,10 +91,33 @@ pub fn richardson_lucy_with(
     initial_psf: &Kernel2D,
     config: &BlindRichardsonLucy,
 ) -> Result<BlindOutput<DynamicImage>> {
+    let observed = image_to_luma_array(image)?;
+    let output = restore_array2(&observed, initial_psf, config)?;
+    let restored = luma_array_to_image(&output.image, image)?;
+    Ok(BlindOutput {
+        image: restored,
+        psf: output.psf,
+        report: output.report,
+    })
+}
+
+pub(crate) fn richardson_lucy_array2_with(
+    image: &Array2<f32>,
+    initial_psf: &Kernel2D,
+    config: &BlindRichardsonLucy,
+) -> Result<BlindOutput<Array2<f32>>> {
+    restore_array2(image, initial_psf, config)
+}
+
+fn restore_array2(
+    image: &Array2<f32>,
+    initial_psf: &Kernel2D,
+    config: &BlindRichardsonLucy,
+) -> Result<BlindOutput<Array2<f32>>> {
     validate(initial_psf)?;
     validate_config(config)?;
 
-    let mut observed = image_to_luma_array(image)?;
+    let mut observed = image.as_standard_layout().to_owned();
     observed = project_nonnegative_2d(&observed)?;
     finite_real_2d(&observed)?;
 
@@ -167,9 +190,8 @@ pub fn richardson_lucy_with(
         report.psf_update_history.clear();
     }
 
-    let restored = luma_array_to_image(&image_estimate, image)?;
     Ok(BlindOutput {
-        image: restored,
+        image: image_estimate,
         psf: psf_estimate,
         report,
     })

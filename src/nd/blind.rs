@@ -1,6 +1,6 @@
 use ndarray::Array2;
 
-use super::convert::{array2_to_dynamic, dynamic_to_array2, kernel2_from_array};
+use super::convert::kernel2_from_array;
 use crate::blind::{BlindMaximumLikelihood, BlindOutput, BlindRichardsonLucy};
 use crate::Result;
 
@@ -16,15 +16,8 @@ pub fn richardson_lucy_with(
     initial_psf: &Array2<f32>,
     config: &BlindRichardsonLucy,
 ) -> Result<BlindOutput<Array2<f32>>> {
-    let input = array2_to_dynamic(image)?;
     let initial_psf = kernel2_from_array(initial_psf)?;
-    let output = crate::blind::richardson_lucy_with(&input, &initial_psf, config)?;
-    let image = dynamic_to_array2(&output.image)?;
-    Ok(BlindOutput {
-        image,
-        psf: output.psf,
-        report: output.report,
-    })
+    crate::blind::richardson_lucy_array2_with(image, &initial_psf, config)
 }
 
 pub fn maximum_likelihood(
@@ -39,13 +32,6 @@ pub fn maximum_likelihood_with(
     initial_psf: &Array2<f32>,
     config: &BlindMaximumLikelihood,
 ) -> Result<BlindOutput<Array2<f32>>> {
-    let input = array2_to_dynamic(image)?;
     let initial_psf = kernel2_from_array(initial_psf)?;
-    let output = crate::blind::maximum_likelihood_with(&input, &initial_psf, config)?;
-    let image = dynamic_to_array2(&output.image)?;
-    Ok(BlindOutput {
-        image,
-        psf: output.psf,
-        report: output.report,
-    })
+    crate::blind::maximum_likelihood_array2_with(image, &initial_psf, config)
 }

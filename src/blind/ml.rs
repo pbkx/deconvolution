@@ -4,7 +4,7 @@ use ndarray::Array2;
 use crate::psf::{Kernel2D, PsfConstraint};
 use crate::{Error, Result};
 
-use super::rl::richardson_lucy_with;
+use super::rl::{richardson_lucy_array2_with, richardson_lucy_with};
 use super::{BlindOutput, BlindRichardsonLucy};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,6 +95,23 @@ pub fn maximum_likelihood_with(
         .collect_history(config.collect_history);
 
     richardson_lucy_with(image, initial_psf, &rl_config)
+}
+
+pub(crate) fn maximum_likelihood_array2_with(
+    image: &Array2<f32>,
+    initial_psf: &Kernel2D,
+    config: &BlindMaximumLikelihood,
+) -> Result<BlindOutput<Array2<f32>>> {
+    validate_config(config)?;
+
+    let rl_config = BlindRichardsonLucy::new()
+        .iterations(config.iterations)
+        .relative_update_tolerance(config.relative_update_tolerance)
+        .filter_epsilon(config.filter_epsilon)
+        .psf_constraints(config.psf_constraints.clone())
+        .collect_history(config.collect_history);
+
+    richardson_lucy_array2_with(image, initial_psf, &rl_config)
 }
 
 fn validate_config(config: &BlindMaximumLikelihood) -> Result<()> {

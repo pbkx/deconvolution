@@ -333,6 +333,26 @@ pub fn mrnsd_with(
     )
 }
 
+pub(crate) fn mrnsd_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Mrnsd,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_krylov_array2(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Mrnsd,
+    )
+}
+
 pub fn cgls(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     cgls_with(image, psf, &Cgls::new())
 }
@@ -343,6 +363,28 @@ pub fn cgls_with(
     config: &Cgls,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_krylov(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Cgls {
+            positivity: config.positivity,
+        },
+    )
+}
+
+pub(crate) fn cgls_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Cgls,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_krylov_array2(
         image,
         psf,
         KrylovConfig {
@@ -386,6 +428,29 @@ pub fn wpl_with(
     )
 }
 
+pub(crate) fn wpl_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Wpl,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_krylov_array2(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Wpl {
+            precondition_epsilon: config.precondition_epsilon,
+            positivity: config.positivity,
+        },
+    )
+}
+
 pub fn hybr(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     hybr_with(image, psf, &Hybr::new())
 }
@@ -396,6 +461,29 @@ pub fn hybr_with(
     config: &Hybr,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_krylov(
+        image,
+        psf,
+        KrylovConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        KrylovMethod::Hybr {
+            lambda: config.lambda,
+            positivity: config.positivity,
+        },
+    )
+}
+
+pub(crate) fn hybr_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Hybr,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_krylov_array2(
         image,
         psf,
         KrylovConfig {
@@ -444,6 +532,40 @@ fn run_krylov(
         step_size,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+fn run_krylov_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: KrylovConfig,
+    method: KrylovMethod,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_config(config)?;
+    validate_method(method)?;
+
+    let normalized_psf = psf.normalized()?;
+    let operator = Convolution2D::new(&normalized_psf)?;
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let step_size = resolve_step_size(config.step_size)?;
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        planar.alpha_denominator(),
+        &operator,
+        config,
+        method,
+        step_size,
+    )?;
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

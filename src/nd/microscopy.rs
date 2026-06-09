@@ -1,15 +1,13 @@
-use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-use super::convert::{
-    array2_to_dynamic, dynamic_to_array2, kernel3_to_projected_kernel2, validate_array3,
-};
-use crate::iterative::{self, RichardsonLucy, RichardsonLucyTv};
-use crate::optimization::{self, Cmle, Gmle, Qmle};
-use crate::spectral::{self, Wiener};
+use super::convert::{kernel3_to_projected_kernel2, validate_array3};
+use crate::algorithms;
+use crate::iterative::{RichardsonLucy, RichardsonLucyTv};
+use crate::optimization::{Cmle, Gmle, Qmle};
+use crate::spectral::Wiener;
 use crate::{Error, Result, SolveReport, StopReason};
 
 pub fn wiener(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<Array3<f32>> {
@@ -23,7 +21,7 @@ pub fn wiener_with(
 ) -> Result<Array3<f32>> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_image_only(volume, &kernel, |slice, psf| {
-        spectral::wiener_with(slice, psf, config)
+        algorithms::wiener_array2_with(slice, psf, config)
     })
 }
 
@@ -41,7 +39,7 @@ pub fn richardson_lucy_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        iterative::richardson_lucy_with(slice, psf, config)
+        algorithms::richardson_lucy_array2_with(slice, psf, config)
     })
 }
 
@@ -59,7 +57,7 @@ pub fn richardson_lucy_tv_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        iterative::richardson_lucy_tv_with(slice, psf, config)
+        algorithms::richardson_lucy_tv_array2_with(slice, psf, config)
     })
 }
 
@@ -74,7 +72,7 @@ pub fn cmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        optimization::cmle_with(slice, psf, config)
+        algorithms::cmle_array2_with(slice, psf, config)
     })
 }
 
@@ -89,7 +87,7 @@ pub fn gmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        optimization::gmle_with(slice, psf, config)
+        algorithms::gmle_array2_with(slice, psf, config)
     })
 }
 
@@ -104,7 +102,7 @@ pub fn qmle_with(
 ) -> Result<(Array3<f32>, SolveReport)> {
     let kernel = kernel3_to_projected_kernel2(psf)?;
     run_slicewise_report(volume, &kernel, |slice, psf| {
-        optimization::qmle_with(slice, psf, config)
+        algorithms::qmle_array2_with(slice, psf, config)
     })
 }
 
@@ -114,7 +112,7 @@ fn run_slicewise_image_only<F>(
     run: F,
 ) -> Result<Array3<f32>>
 where
-    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<DynamicImage> + Sync,
+    F: Fn(&Array2<f32>, &crate::Kernel2D) -> Result<Array2<f32>> + Sync,
 {
     validate_array3(volume)?;
     let (depth, height, width) = volume.dim();
@@ -124,9 +122,7 @@ where
         .into_par_iter()
         .map(|z| {
             let slice = volume.index_axis(Axis(0), z).to_owned();
-            let input = array2_to_dynamic(&slice)?;
-            let restored = run(&input, psf)?;
-            let restored = dynamic_to_array2(&restored)?;
+            let restored = run(&slice, psf)?;
             if restored.dim() != (height, width) {
                 return Err(Error::DimensionMismatch);
             }
@@ -138,9 +134,7 @@ where
     let slices: Vec<Result<(usize, Array2<f32>)>> = (0..depth)
         .map(|z| {
             let slice = volume.index_axis(Axis(0), z).to_owned();
-            let input = array2_to_dynamic(&slice)?;
-            let restored = run(&input, psf)?;
-            let restored = dynamic_to_array2(&restored)?;
+            let restored = run(&slice, psf)?;
             if restored.dim() != (height, width) {
                 return Err(Error::DimensionMismatch);
             }
@@ -163,7 +157,7 @@ fn run_slicewise_report<F>(
     run: F,
 ) -> Result<(Array3<f32>, SolveReport)>
 where
-    F: Fn(&DynamicImage, &crate::Kernel2D) -> Result<(DynamicImage, SolveReport)> + Sync,
+    F: Fn(&Array2<f32>, &crate::Kernel2D) -> Result<(Array2<f32>, SolveReport)> + Sync,
 {
     validate_array3(volume)?;
     let (depth, height, width) = volume.dim();
@@ -173,9 +167,7 @@ where
         .into_par_iter()
         .map(|z| {
             let slice = volume.index_axis(Axis(0), z).to_owned();
-            let input = array2_to_dynamic(&slice)?;
-            let (restored, report) = run(&input, psf)?;
-            let restored = dynamic_to_array2(&restored)?;
+            let (restored, report) = run(&slice, psf)?;
             if restored.dim() != (height, width) {
                 return Err(Error::DimensionMismatch);
             }
@@ -187,9 +179,7 @@ where
     let slices: Vec<Result<(usize, Array2<f32>, SolveReport)>> = (0..depth)
         .map(|z| {
             let slice = volume.index_axis(Axis(0), z).to_owned();
-            let input = array2_to_dynamic(&slice)?;
-            let (restored, report) = run(&input, psf)?;
-            let restored = dynamic_to_array2(&restored)?;
+            let (restored, report) = run(&slice, psf)?;
             if restored.dim() != (height, width) {
                 return Err(Error::DimensionMismatch);
             }

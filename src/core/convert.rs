@@ -1,5 +1,5 @@
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, LumaA, Primitive, Rgb, Rgba};
-use ndarray::{Array2, Array3};
+use ndarray::{Array2, Array3, Axis};
 
 use super::color::{sample_from_f32, sample_to_f32, PixelLayout, PixelSample, SampleKind};
 use crate::{Error, Result};
@@ -29,6 +29,43 @@ impl PlanarImage {
             DynamicImage::ImageRgba32F(rgba) => Self::from_rgba_view(rgba),
             _ => Err(Error::UnsupportedPixelType),
         }
+    }
+
+    pub(crate) fn from_array2(image: &Array2<f32>) -> Result<Self> {
+        if image.is_empty() {
+            return Err(Error::EmptyImage);
+        }
+        if image.iter().any(|value| !value.is_finite()) {
+            return Err(Error::NonFiniteInput);
+        }
+
+        let (height, width) = image.dim();
+        let width = u32::try_from(width).map_err(|_| Error::DimensionMismatch)?;
+        let height = u32::try_from(height).map_err(|_| Error::DimensionMismatch)?;
+        let mut color = new_color(PixelLayout::Gray, width, height)?;
+        color
+            .index_axis_mut(Axis(0), 0)
+            .assign(&image.as_standard_layout());
+        Self::new(
+            width,
+            height,
+            PixelLayout::Gray,
+            SampleKind::F32,
+            color,
+            None,
+        )
+    }
+
+    pub(crate) fn to_array2_gray(color: &Array3<f32>) -> Result<Array2<f32>> {
+        let shape = color.shape();
+        if shape.len() != 3 || shape[0] != 1 || shape[1] == 0 || shape[2] == 0 {
+            return Err(Error::DimensionMismatch);
+        }
+        if color.iter().any(|value| !value.is_finite()) {
+            return Err(Error::NonFiniteInput);
+        }
+
+        Ok(color.index_axis(Axis(0), 0).to_owned())
     }
 
     pub(crate) fn from_gray_view<I, S>(image: &I) -> Result<Self>
@@ -665,6 +702,14 @@ mod tests {
         assert_eq!(planar.dimensions(), (7, 5));
         assert_eq!(planar.color().shape(), [3, 5, 7]);
         assert_eq!(planar.alpha().unwrap().shape(), [5, 7]);
+    }
+
+    #[test]
+    fn array2_roundtrip_preserves_fractional_values() {
+        let input = ndarray::array![[0.12345_f32, 0.50123], [0.77777, 1.25]];
+        let planar = PlanarImage::from_array2(&input).unwrap();
+        let output = PlanarImage::to_array2_gray(planar.color()).unwrap();
+        assert_eq!(output, input);
     }
 
     #[test]

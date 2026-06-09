@@ -327,6 +327,27 @@ pub fn landweber_with(
     )
 }
 
+pub(crate) fn landweber_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Landweber,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_iterative_array2(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::Landweber,
+    )
+}
+
 pub fn van_cittert(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     van_cittert_with(image, psf, &VanCittert::new())
 }
@@ -337,6 +358,27 @@ pub fn van_cittert_with(
     config: &VanCittert,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_iterative(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::VanCittert,
+    )
+}
+
+pub(crate) fn van_cittert_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &VanCittert,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_iterative_array2(
         image,
         psf,
         IterativeConfig {
@@ -383,6 +425,30 @@ pub fn tikhonov_miller_with(
     )
 }
 
+pub(crate) fn tikhonov_miller_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &TikhonovMiller,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_iterative_array2(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::TikhonovMiller {
+            lambda: config.lambda,
+            constrained: false,
+        },
+    )
+}
+
 pub fn ictm(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     ictm_with(image, psf, &Ictm::new())
 }
@@ -393,6 +459,30 @@ pub fn ictm_with(
     config: &Ictm,
 ) -> Result<(DynamicImage, SolveReport)> {
     run_iterative(
+        image,
+        psf,
+        IterativeConfig {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            step_size: config.step_size,
+            positivity: true,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        IterativeMethod::TikhonovMiller {
+            lambda: config.lambda,
+            constrained: true,
+        },
+    )
+}
+
+pub(crate) fn ictm_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Ictm,
+) -> Result<(Array2<f32>, SolveReport)> {
+    run_iterative_array2(
         image,
         psf,
         IterativeConfig {
@@ -441,6 +531,39 @@ fn run_iterative(
         step_size,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
+    Ok((restored, report))
+}
+
+fn run_iterative_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: IterativeConfig,
+    method: IterativeMethod,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_config(config, method)?;
+
+    let normalized_psf = psf.normalized()?;
+    let operator = Convolution2D::new(&normalized_psf)?;
+    let planar = PlanarImage::from_array2(image)?;
+    let (width_u32, height_u32) = planar.dimensions();
+    let width = usize::try_from(width_u32).map_err(|_| Error::DimensionMismatch)?;
+    let height = usize::try_from(height_u32).map_err(|_| Error::DimensionMismatch)?;
+    if width == 0 || height == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let step_size = resolve_step_size(config.step_size, &operator, (height, width), method)?;
+    let (restored_color, report) = restore_color(
+        planar.color(),
+        planar.alpha(),
+        planar.alpha_denominator(),
+        &operator,
+        config,
+        method,
+        step_size,
+    )?;
+    let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
 }
 

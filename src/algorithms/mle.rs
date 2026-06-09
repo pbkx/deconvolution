@@ -1,6 +1,10 @@
 use image::DynamicImage;
+use ndarray::Array2;
 
-use super::rl::{richardson_lucy_tv_with, richardson_lucy_with, RichardsonLucy, RichardsonLucyTv};
+use super::rl::{
+    richardson_lucy_array2_with, richardson_lucy_tv_array2_with, richardson_lucy_tv_with,
+    richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
+};
 use crate::{ChannelMode, Error, Kernel2D, RangePolicy, Result, SolveReport};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -259,6 +263,25 @@ pub fn cmle_with(
     richardson_lucy_with(image, psf, &rl)
 }
 
+pub(crate) fn cmle_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Cmle,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_cmle(config)?;
+    let rl = RichardsonLucy::new()
+        .iterations(config.iterations)
+        .relative_update_tolerance(config.relative_update_tolerance)
+        .filter_epsilon(config.filter_epsilon)
+        .damping(acuity_to_damping(config.acuity)?)
+        .readout_noise(snr_to_readout_noise(config.snr)?)
+        .positivity(true)
+        .channel_mode(config.channel_mode)
+        .range_policy(config.range_policy)
+        .collect_history(config.collect_history);
+    richardson_lucy_array2_with(image, psf, &rl)
+}
+
 pub fn gmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     gmle_with(image, psf, &Gmle::new())
 }
@@ -290,6 +313,33 @@ pub fn gmle_with(
     richardson_lucy_tv_with(image, psf, &rl_tv)
 }
 
+pub(crate) fn gmle_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Gmle,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_gmle(config)?;
+    let snr_noise = snr_to_readout_noise(config.snr)?;
+    let noise_damping = (2.0 / config.snr.max(1.0)).sqrt().clamp(0.0, 1.0);
+    let damping = acuity_to_damping(config.acuity)?
+        .unwrap_or(0.0)
+        .max(noise_damping);
+    let tv_weight = ((config.roughness / config.snr.max(1.0)) * 0.8).clamp(0.0, 0.15);
+    let rl_tv = RichardsonLucyTv::new()
+        .iterations(config.iterations)
+        .relative_update_tolerance(config.relative_update_tolerance)
+        .filter_epsilon(config.filter_epsilon)
+        .damping(Some(damping))
+        .readout_noise(snr_noise)
+        .positivity(true)
+        .channel_mode(config.channel_mode)
+        .range_policy(config.range_policy)
+        .collect_history(config.collect_history)
+        .tv_weight(tv_weight)
+        .tv_epsilon(config.tv_epsilon);
+    richardson_lucy_tv_array2_with(image, psf, &rl_tv)
+}
+
 pub fn qmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     qmle_with(image, psf, &Qmle::new())
 }
@@ -311,6 +361,25 @@ pub fn qmle_with(
         .range_policy(config.range_policy)
         .collect_history(config.collect_history);
     richardson_lucy_with(image, psf, &rl)
+}
+
+pub(crate) fn qmle_array2_with(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &Qmle,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate_qmle(config)?;
+    let rl = RichardsonLucy::new()
+        .iterations(config.iterations)
+        .relative_update_tolerance(config.relative_update_tolerance)
+        .filter_epsilon(config.filter_epsilon)
+        .damping(acuity_to_damping(config.acuity)?)
+        .readout_noise(snr_to_readout_noise(config.snr)? * 0.5)
+        .positivity(true)
+        .channel_mode(config.channel_mode)
+        .range_policy(config.range_policy)
+        .collect_history(config.collect_history);
+    richardson_lucy_array2_with(image, psf, &rl)
 }
 
 fn snr_to_readout_noise(snr: f32) -> Result<f32> {
