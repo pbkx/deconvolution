@@ -356,6 +356,7 @@ name = "deconvolution"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "half",
  "image",
  "ndarray",
  "num-complex",

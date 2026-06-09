@@ -83,6 +83,44 @@ fn nd_microscopy_wiener_retains_fractional_precision() {
     assert!(quantized_diff > 5e-4);
 }
 
+#[cfg(feature = "f16")]
+#[test]
+fn nd_known_psf_accepts_f16_arrays() {
+    use half::f16;
+
+    let input_f32 = Array2::from_shape_fn((11, 13), |(y, x)| {
+        0.08 + (((y * 13 + x) as f32 * 0.021_337 + 0.198_76) % 0.84)
+    });
+    let psf_f32 = delta2d((3, 3)).unwrap().as_array().to_owned();
+    let input = input_f32.mapv(f16::from_f32);
+    let psf = psf_f32.mapv(f16::from_f32);
+
+    let restored = nd::known_psf::wiener_with(&input, &psf, &Wiener::new().nsr(0.0)).unwrap();
+    let restored_f32 =
+        nd::known_psf::wiener_with(&input_f32, &psf_f32, &Wiener::new().nsr(0.0)).unwrap();
+    let restored_as_f32 = restored.mapv(f16::to_f32);
+
+    assert_eq!(restored.dim(), input.dim());
+    assert!(restored_as_f32.iter().all(|value| value.is_finite()));
+    assert!(restored_as_f32.iter().any(|value| value.abs() > 0.0));
+    assert!(max_abs_diff_2d(&restored_as_f32, &restored_f32).unwrap() < 2e-3);
+
+    let (rl_restored, report) = nd::known_psf::richardson_lucy_with(
+        &input,
+        &psf,
+        &RichardsonLucy::new()
+            .iterations(2)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+    let rl_as_f32 = rl_restored.mapv(f16::to_f32);
+    assert_eq!(rl_restored.dim(), input.dim());
+    assert!(rl_as_f32.iter().all(|value| value.is_finite()));
+    assert!(rl_as_f32.iter().any(|value| value.abs() > 0.0));
+    assert!(report.iterations >= 1);
+}
+
 #[test]
 fn blind_nd_path_returns_normalized_psf() {
     let sharp = checkerboard_2d((56, 56), 4, 0.0, 1.0).unwrap();

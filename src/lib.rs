@@ -190,6 +190,8 @@
 //!
 //! The public [`nd`] module exposes array-first workflows for users who already
 //! work in ndarray or need 3D volumes.
+//! Enable the optional `f16` feature to pass `half::f16` arrays into the 2D
+//! known-PSF ndarray API while keeping computation in `f32`.
 //!
 //! 2D known-PSF methods in [`nd::known_psf`]:
 //!
