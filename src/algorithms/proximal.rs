@@ -332,6 +332,7 @@ fn run_proximal(
     let (restored_color, report) = restore_color(
         planar.color(),
         planar.alpha(),
+        planar.alpha_denominator(),
         &operator,
         config,
         method,
@@ -344,6 +345,7 @@ fn run_proximal(
 fn restore_color(
     color: &Array3<f32>,
     alpha: Option<&Array2<f32>>,
+    alpha_denominator: f32,
     operator: &Convolution2D,
     config: ProximalConfig,
     method: ProximalMethod,
@@ -365,9 +367,15 @@ fn restore_color(
             restore_independent(color, operator, config, method, step_size)
         }
         ChannelMode::LumaOnly => restore_luma_only(color, operator, config, method, step_size),
-        ChannelMode::PremultipliedAlpha => {
-            restore_premultiplied(color, alpha, operator, config, method, step_size)
-        }
+        ChannelMode::PremultipliedAlpha => restore_premultiplied(
+            color,
+            alpha,
+            alpha_denominator,
+            operator,
+            config,
+            method,
+            step_size,
+        ),
     }
 }
 
@@ -451,6 +459,7 @@ fn restore_luma_only(
 fn restore_premultiplied(
     color: &Array3<f32>,
     alpha: Option<&Array2<f32>>,
+    alpha_denominator: f32,
     operator: &Convolution2D,
     config: ProximalConfig,
     method: ProximalMethod,
@@ -470,7 +479,7 @@ fn restore_premultiplied(
     let mut premultiplied = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
-            let a = (alpha[[y, x]] / 255.0).clamp(0.0, 1.0);
+            let a = (alpha[[y, x]] / alpha_denominator).clamp(0.0, 1.0);
             for c in 0..channels {
                 premultiplied[[c, y, x]] = color[[c, y, x]] * a;
             }
@@ -482,7 +491,7 @@ fn restore_premultiplied(
     let mut output = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
-            let a = (alpha[[y, x]] / 255.0).clamp(0.0, 1.0);
+            let a = (alpha[[y, x]] / alpha_denominator).clamp(0.0, 1.0);
             for c in 0..channels {
                 output[[c, y, x]] = if a > f32::EPSILON {
                     restored[[c, y, x]] / a

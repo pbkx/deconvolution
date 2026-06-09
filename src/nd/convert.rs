@@ -26,7 +26,7 @@ pub(crate) fn dynamic_to_array2(image: &DynamicImage) -> Result<Array2<f32>> {
                 let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
                 for x in 0..width {
                     let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-                    output[[y, x]] = sample_to_f32(gray_alpha.get_pixel(x_u32, y_u32)[0]) / 255.0;
+                    output[[y, x]] = sample_to_f32(gray_alpha.get_pixel(x_u32, y_u32)[0])? / 255.0;
                 }
             }
             Ok(output)
@@ -47,7 +47,7 @@ pub(crate) fn gray_to_array2(image: &GrayImage) -> Result<Array2<f32>> {
         let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
         for x in 0..width {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0]) / 255.0;
+            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0])? / 255.0;
         }
     }
     Ok(output)
@@ -65,7 +65,7 @@ pub(crate) fn array2_to_gray(input: &Array2<f32>) -> Result<GrayImage> {
         for x in 0..width {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
             let scaled = input[[y, x]].clamp(0.0, 1.0) * 255.0;
-            let value = sample_from_f32(scaled)?;
+            let value = sample_from_f32::<u8>(scaled)?;
             image.put_pixel(x_u32, y_u32, Luma([value]));
         }
     }

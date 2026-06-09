@@ -14,7 +14,7 @@ use deconvolution::spectral::{
     RegularizedInverseFilter, TikhonovInverseFilter, UnsupervisedWiener, Wiener,
 };
 use deconvolution::{Padding, Transfer2D};
-use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgba, RgbaImage};
 use ndarray::{array, Array2};
 use num_complex::Complex32;
 
@@ -379,6 +379,62 @@ fn wiener_dimensions_and_alpha_are_preserved() {
         for x in 0..33_u32 {
             assert_eq!(restored_rgba.get_pixel(x, y)[3], rgba.get_pixel(x, y)[3]);
         }
+    }
+}
+
+#[test]
+fn wiener_preserves_luma16_variant() {
+    let mut luma = ImageBuffer::<Luma<u16>, Vec<u16>>::new(13, 11);
+    for y in 0..11_u32 {
+        for x in 0..13_u32 {
+            let value = ((4096 * x + 2048 * y + 1024) % 65_536) as u16;
+            luma.put_pixel(x, y, Luma([value]));
+        }
+    }
+
+    let psf = delta2d((3, 3)).unwrap();
+    let restored = wiener_with(
+        &DynamicImage::ImageLuma16(luma),
+        &psf,
+        &Wiener::new().collect_history(true),
+    )
+    .unwrap();
+
+    match restored {
+        DynamicImage::ImageLuma16(output) => {
+            assert_eq!(output.dimensions(), (13, 11));
+            assert!(output.pixels().any(|pixel| pixel[0] > 0));
+        }
+        _ => panic!("expected luma16"),
+    }
+}
+
+#[test]
+fn wiener_preserves_rgba16_alpha() {
+    let mut rgba = ImageBuffer::<Rgba<u16>, Vec<u16>>::new(9, 7);
+    for y in 0..7_u32 {
+        for x in 0..9_u32 {
+            let r = ((1024 * x + 257 * y) % 65_536) as u16;
+            let g = ((2048 * x + 513 * y) % 65_536) as u16;
+            let b = ((4096 * x + 1025 * y) % 65_536) as u16;
+            let a = ((8192 * x + 2051 * y) % 65_536) as u16;
+            rgba.put_pixel(x, y, Rgba([r, g, b, a]));
+        }
+    }
+
+    let psf = delta2d((3, 3)).unwrap();
+    let restored = wiener(&DynamicImage::ImageRgba16(rgba.clone()), &psf).unwrap();
+
+    match restored {
+        DynamicImage::ImageRgba16(output) => {
+            assert_eq!(output.dimensions(), rgba.dimensions());
+            for y in 0..7_u32 {
+                for x in 0..9_u32 {
+                    assert_eq!(output.get_pixel(x, y)[3], rgba.get_pixel(x, y)[3]);
+                }
+            }
+        }
+        _ => panic!("expected rgba16"),
     }
 }
 

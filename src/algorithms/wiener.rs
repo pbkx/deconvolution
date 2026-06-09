@@ -195,7 +195,10 @@ pub fn wiener_with(image: &DynamicImage, psf: &Kernel2D, config: &Wiener) -> Res
 
     let (restored_color, stats) = restore_color(
         planar.color(),
-        planar.alpha(),
+        AlphaData {
+            values: planar.alpha(),
+            denominator: planar.alpha_denominator(),
+        },
         &blur_transfer,
         correlation,
         config,
@@ -245,7 +248,10 @@ pub fn unsupervised_wiener_with(
         let correlation = resolve_correlation_form(&iteration_config, fft_dims)?;
         let (_, stats) = restore_color(
             planar.color(),
-            planar.alpha(),
+            AlphaData {
+                values: planar.alpha(),
+                denominator: planar.alpha_denominator(),
+            },
             &blur_transfer,
             correlation,
             &iteration_config,
@@ -269,7 +275,10 @@ pub fn unsupervised_wiener_with(
     let correlation = resolve_correlation_form(&final_config, fft_dims)?;
     let (restored_color, stats) = restore_color(
         planar.color(),
-        planar.alpha(),
+        AlphaData {
+            values: planar.alpha(),
+            denominator: planar.alpha_denominator(),
+        },
         &blur_transfer,
         correlation,
         &final_config,
@@ -317,6 +326,12 @@ struct ChannelStats {
     noise_power: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct AlphaData<'a> {
+    values: Option<&'a Array2<f32>>,
+    denominator: f32,
+}
+
 fn resolve_correlation_form<'a>(
     config: &'a Wiener,
     dims: (usize, usize),
@@ -343,7 +358,7 @@ fn resolve_correlation_form<'a>(
 
 fn restore_color(
     color: &Array3<f32>,
-    alpha: Option<&Array2<f32>>,
+    alpha: AlphaData<'_>,
     blur_transfer: &Array2<Complex32>,
     correlation: CorrelationForm<'_>,
     config: &Wiener,
@@ -472,28 +487,28 @@ fn restore_luma_only(
 
 fn restore_premultiplied(
     color: &Array3<f32>,
-    alpha: Option<&Array2<f32>>,
+    alpha: AlphaData<'_>,
     blur_transfer: &Array2<Complex32>,
     correlation: CorrelationForm<'_>,
     config: &Wiener,
     stats: &mut Vec<ChannelStats>,
     cache: &mut PlanCache,
 ) -> Result<Array3<f32>> {
-    let Some(alpha) = alpha else {
+    let Some(alpha_values) = alpha.values else {
         return restore_independent(color, blur_transfer, correlation, config, stats, cache);
     };
 
     let channels = color.shape()[0];
     let height = color.shape()[1];
     let width = color.shape()[2];
-    if channels != 3 || alpha.dim() != (height, width) {
+    if channels != 3 || alpha_values.dim() != (height, width) {
         return restore_independent(color, blur_transfer, correlation, config, stats, cache);
     }
 
     let mut premultiplied = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
-            let a = (alpha[[y, x]] / 255.0).clamp(0.0, 1.0);
+            let a = (alpha_values[[y, x]] / alpha.denominator).clamp(0.0, 1.0);
             for c in 0..channels {
                 premultiplied[[c, y, x]] = color[[c, y, x]] * a;
             }
@@ -511,7 +526,7 @@ fn restore_premultiplied(
     let mut output = Array3::zeros((channels, height, width));
     for y in 0..height {
         for x in 0..width {
-            let a = (alpha[[y, x]] / 255.0).clamp(0.0, 1.0);
+            let a = (alpha_values[[y, x]] / alpha.denominator).clamp(0.0, 1.0);
             for c in 0..channels {
                 output[[c, y, x]] = if a > f32::EPSILON {
                     restored[[c, y, x]] / a

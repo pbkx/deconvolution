@@ -529,7 +529,7 @@ fn gray_to_array(image: &GrayImage) -> Result<Array2<f32>> {
         let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
         for x in 0..width {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0]);
+            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0])?;
         }
     }
     Ok(output)
@@ -543,7 +543,7 @@ fn gray_alpha_to_array(image: &GrayAlphaImage) -> Result<Array2<f32>> {
         let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
         for x in 0..width {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0]);
+            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0])?;
         }
     }
     Ok(output)
@@ -561,7 +561,7 @@ fn array_to_gray(input: &Array2<f32>, width: u32, height: u32) -> Result<GrayIma
         let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
         for x in 0..width_usize {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let luma = sample_from_f32(input[[y, x]])?;
+            let luma = sample_from_f32::<u8>(input[[y, x]])?;
             output.put_pixel(x_u32, y_u32, Luma([luma]));
         }
     }
@@ -586,7 +586,7 @@ fn array_to_gray_alpha(
         let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
         for x in 0..width_usize {
             let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let luma = sample_from_f32(input[[y, x]])?;
+            let luma = sample_from_f32::<u8>(input[[y, x]])?;
             let alpha = source.get_pixel(x_u32, y_u32)[1];
             output.put_pixel(x_u32, y_u32, LumaA([luma, alpha]));
         }

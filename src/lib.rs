@@ -44,13 +44,19 @@
 //!
 //! ## Image API and Configuration
 //!
-//! Image-facing algorithms accept [`image::DynamicImage`] values and currently
+//! Known-PSF image-facing algorithms accept [`image::DynamicImage`] values and
 //! support these variants:
 //!
 //! - `ImageLuma8`
 //! - `ImageLumaA8`
 //! - `ImageRgb8`
 //! - `ImageRgba8`
+//! - `ImageLuma16`
+//! - `ImageLumaA16`
+//! - `ImageRgb16`
+//! - `ImageRgba16`
+//! - `ImageRgb32F`
+//! - `ImageRgba32F`
 //!
 //! Shared configuration enums:
 //!

@@ -78,13 +78,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Image API, Channels, and Policies
 
-The primary API accepts `image::DynamicImage` values. Current image-facing
-algorithms support these `DynamicImage` variants:
+The known-PSF image API accepts `image::DynamicImage` values and supports these
+`DynamicImage` variants:
 
 - `ImageLuma8`
 - `ImageLumaA8`
 - `ImageRgb8`
 - `ImageRgba8`
+- `ImageLuma16`
+- `ImageLumaA16`
+- `ImageRgb16`
+- `ImageRgba16`
+- `ImageRgb32F`
+- `ImageRgba32F`
 
 Configuration enums are shared across algorithm families:
 
@@ -97,7 +103,7 @@ Configuration enums are shared across algorithm families:
 
 Use `ChannelMode::Independent` for per-channel color restoration,
 `ChannelMode::LumaOnly` when the blur should primarily affect luminance, and
-`RangePolicy::PreserveInput` when working in normal 8-bit image ranges.
+`RangePolicy::PreserveInput` when working in normal image sample ranges.
 
 ### PSFs, OTFs, and Support Utilities
 
@@ -413,8 +419,8 @@ cargo doc --workspace --no-deps --all-features
 
 ### Limitations and Scope
 
-- The image-facing API currently supports 8-bit Gray, GrayAlpha, Rgb, and Rgba
-  `DynamicImage` variants.
+- Known-PSF image-facing algorithms support u8/u16 Gray, GrayAlpha, Rgb, and Rgba
+  `DynamicImage` variants, plus 32-bit float Rgb and Rgba images.
 - Deconvolution quality depends heavily on the PSF, boundary assumptions, and
   regularization strength.
 - Aggressive inverse filtering can amplify noise and ringing; prefer Wiener,
