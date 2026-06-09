@@ -253,6 +253,128 @@ impl PlanarImage {
     }
 }
 
+pub(crate) fn rebuild_dynamic_like(
+    source: &DynamicImage,
+    color: &Array3<f32>,
+) -> Result<DynamicImage> {
+    match source {
+        DynamicImage::ImageLuma8(luma) => {
+            let restored = rebuild_luma(luma.width(), luma.height(), color)?;
+            Ok(DynamicImage::ImageLuma8(restored))
+        }
+        DynamicImage::ImageLumaA8(luma_alpha) => {
+            let restored =
+                rebuild_luma_alpha(luma_alpha.width(), luma_alpha.height(), color, luma_alpha)?;
+            Ok(DynamicImage::ImageLumaA8(restored))
+        }
+        DynamicImage::ImageRgb8(rgb) => {
+            let restored = rebuild_rgb(rgb.width(), rgb.height(), color)?;
+            Ok(DynamicImage::ImageRgb8(restored))
+        }
+        DynamicImage::ImageRgba8(rgba) => {
+            let restored = rebuild_rgba(rgba.width(), rgba.height(), color, rgba)?;
+            Ok(DynamicImage::ImageRgba8(restored))
+        }
+        _ => Err(Error::UnsupportedPixelType),
+    }
+}
+
+fn rebuild_luma(width: u32, height: u32, color: &Array3<f32>) -> Result<GrayImage> {
+    verify_color_shape(color, 1, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = GrayImage::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let l = sample_from_f32(color[[0, y, x]])?;
+            output.put_pixel(x_u32, y_u32, Luma([l]));
+        }
+    }
+    Ok(output)
+}
+
+fn rebuild_luma_alpha(
+    width: u32,
+    height: u32,
+    color: &Array3<f32>,
+    source: &GrayAlphaImage,
+) -> Result<GrayAlphaImage> {
+    verify_color_shape(color, 1, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = GrayAlphaImage::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let l = sample_from_f32(color[[0, y, x]])?;
+            let a = source.get_pixel(x_u32, y_u32)[1];
+            output.put_pixel(x_u32, y_u32, LumaA([l, a]));
+        }
+    }
+    Ok(output)
+}
+
+fn rebuild_rgb(width: u32, height: u32, color: &Array3<f32>) -> Result<RgbImage> {
+    verify_color_shape(color, 3, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = RgbImage::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let r = sample_from_f32(color[[0, y, x]])?;
+            let g = sample_from_f32(color[[1, y, x]])?;
+            let b = sample_from_f32(color[[2, y, x]])?;
+            output.put_pixel(x_u32, y_u32, Rgb([r, g, b]));
+        }
+    }
+    Ok(output)
+}
+
+fn rebuild_rgba(
+    width: u32,
+    height: u32,
+    color: &Array3<f32>,
+    source: &RgbaImage,
+) -> Result<RgbaImage> {
+    verify_color_shape(color, 3, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = RgbaImage::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let r = sample_from_f32(color[[0, y, x]])?;
+            let g = sample_from_f32(color[[1, y, x]])?;
+            let b = sample_from_f32(color[[2, y, x]])?;
+            let a = source.get_pixel(x_u32, y_u32)[3];
+            output.put_pixel(x_u32, y_u32, Rgba([r, g, b, a]));
+        }
+    }
+    Ok(output)
+}
+
+fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: u32) -> Result<()> {
+    let width = to_usize(width)?;
+    let height = to_usize(height)?;
+    if color.shape() != [channels, height, width] {
+        return Err(Error::DimensionMismatch);
+    }
+    if color.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(())
+}
+
 fn to_usize(value: u32) -> Result<usize> {
     usize::try_from(value).map_err(|_| Error::DimensionMismatch)
 }
@@ -271,9 +393,9 @@ fn new_alpha(width: u32, height: u32) -> Result<Array2<f32>> {
 
 #[cfg(test)]
 mod tests {
-    use image::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
+    use image::{DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
-    use super::PlanarImage;
+    use super::{rebuild_dynamic_like, PlanarImage};
     use crate::Error;
 
     #[test]
@@ -304,6 +426,55 @@ mod tests {
         let planar = PlanarImage::from_rgba_view(&image).unwrap();
         let rebuilt = planar.to_rgba_like(&image).unwrap();
         assert_eq!(rebuilt, image);
+    }
+
+    #[test]
+    fn gray_alpha_roundtrip_preserves_alpha_exactly() {
+        let image = GrayAlphaImage::from_raw(2, 2, vec![10, 40, 1, 255, 90, 0, 7, 128]).unwrap();
+        let planar = PlanarImage::from_gray_alpha_view(&image).unwrap();
+        let rebuilt = planar.to_gray_alpha_like(&image).unwrap();
+        assert_eq!(rebuilt, image);
+    }
+
+    #[test]
+    fn dynamic_rebuild_preserves_u8_variants() {
+        let luma = GrayImage::from_raw(2, 2, vec![0, 64, 128, 255]).unwrap();
+        let source = DynamicImage::ImageLuma8(luma.clone());
+        let planar = PlanarImage::from_dynamic(&source).unwrap();
+        match rebuild_dynamic_like(&source, planar.color()).unwrap() {
+            DynamicImage::ImageLuma8(output) => assert_eq!(output, luma),
+            _ => panic!("expected luma8"),
+        }
+
+        let luma_alpha =
+            GrayAlphaImage::from_raw(2, 2, vec![0, 255, 64, 128, 128, 64, 255, 0]).unwrap();
+        let source = DynamicImage::ImageLumaA8(luma_alpha.clone());
+        let planar = PlanarImage::from_dynamic(&source).unwrap();
+        match rebuild_dynamic_like(&source, planar.color()).unwrap() {
+            DynamicImage::ImageLumaA8(output) => assert_eq!(output, luma_alpha),
+            _ => panic!("expected lumaA8"),
+        }
+
+        let rgb = RgbImage::from_raw(2, 2, vec![1, 2, 3, 4, 5, 6, 250, 240, 230, 0, 1, 2]).unwrap();
+        let source = DynamicImage::ImageRgb8(rgb.clone());
+        let planar = PlanarImage::from_dynamic(&source).unwrap();
+        match rebuild_dynamic_like(&source, planar.color()).unwrap() {
+            DynamicImage::ImageRgb8(output) => assert_eq!(output, rgb),
+            _ => panic!("expected rgb8"),
+        }
+
+        let rgba = RgbaImage::from_raw(
+            2,
+            2,
+            vec![10, 20, 30, 40, 1, 2, 3, 255, 90, 91, 92, 0, 7, 8, 9, 128],
+        )
+        .unwrap();
+        let source = DynamicImage::ImageRgba8(rgba.clone());
+        let planar = PlanarImage::from_dynamic(&source).unwrap();
+        match rebuild_dynamic_like(&source, planar.color()).unwrap() {
+            DynamicImage::ImageRgba8(output) => assert_eq!(output, rgba),
+            _ => panic!("expected rgba8"),
+        }
     }
 
     #[test]

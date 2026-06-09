@@ -372,6 +372,7 @@ fn wiener_dimensions_and_alpha_are_preserved() {
 
     let psf = gaussian2d((7, 7), 1.1).unwrap();
     let restored = wiener(&DynamicImage::ImageRgba8(rgba.clone()), &psf).unwrap();
+    assert!(matches!(restored, DynamicImage::ImageRgba8(_)));
     let restored_rgba = restored.to_rgba8();
     assert_eq!(restored_rgba.dimensions(), rgba.dimensions());
     for y in 0..25_u32 {

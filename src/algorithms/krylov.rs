@@ -1,9 +1,8 @@
-use image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
+use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
 
-use crate::core::color::sample_from_f32;
 use crate::core::conv::Convolution2D;
-use crate::core::convert::PlanarImage;
+use crate::core::convert::{rebuild_dynamic_like, PlanarImage};
 use crate::core::diagnostics::Diagnostics;
 use crate::core::operator::{inner_product_2d, LinearOperator2D};
 use crate::core::projections::project_nonnegative_2d;
@@ -443,7 +442,7 @@ fn run_krylov(
         method,
         step_size,
     )?;
-    let restored = rebuild_image(image, &restored_color)?;
+    let restored = rebuild_dynamic_like(image, &restored_color)?;
     Ok((restored, report))
 }
 
@@ -1317,125 +1316,6 @@ fn select_stop_reason(reports: &[SolveReport]) -> StopReason {
         return StopReason::RelativeUpdate;
     }
     StopReason::MaxIterations
-}
-
-fn rebuild_image(source: &DynamicImage, color: &Array3<f32>) -> Result<DynamicImage> {
-    match source {
-        DynamicImage::ImageLuma8(luma) => {
-            let restored = rebuild_luma(luma.width(), luma.height(), color)?;
-            Ok(DynamicImage::ImageLuma8(restored))
-        }
-        DynamicImage::ImageLumaA8(luma_alpha) => {
-            let restored =
-                rebuild_luma_alpha(luma_alpha.width(), luma_alpha.height(), color, luma_alpha)?;
-            Ok(DynamicImage::ImageLumaA8(restored))
-        }
-        DynamicImage::ImageRgb8(rgb) => {
-            let restored = rebuild_rgb(rgb.width(), rgb.height(), color)?;
-            Ok(DynamicImage::ImageRgb8(restored))
-        }
-        DynamicImage::ImageRgba8(rgba) => {
-            let restored = rebuild_rgba(rgba.width(), rgba.height(), color, rgba)?;
-            Ok(DynamicImage::ImageRgba8(restored))
-        }
-        _ => Err(Error::UnsupportedPixelType),
-    }
-}
-
-fn rebuild_luma(width: u32, height: u32, color: &Array3<f32>) -> Result<GrayImage> {
-    verify_color_shape(color, 1, width, height)?;
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-
-    let mut output = GrayImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let l = sample_from_f32(color[[0, y, x]])?;
-            output.put_pixel(x_u32, y_u32, Luma([l]));
-        }
-    }
-    Ok(output)
-}
-
-fn rebuild_luma_alpha(
-    width: u32,
-    height: u32,
-    color: &Array3<f32>,
-    source: &GrayAlphaImage,
-) -> Result<GrayAlphaImage> {
-    verify_color_shape(color, 1, width, height)?;
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-
-    let mut output = GrayAlphaImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let l = sample_from_f32(color[[0, y, x]])?;
-            let a = source.get_pixel(x_u32, y_u32)[1];
-            output.put_pixel(x_u32, y_u32, LumaA([l, a]));
-        }
-    }
-    Ok(output)
-}
-
-fn rebuild_rgb(width: u32, height: u32, color: &Array3<f32>) -> Result<RgbImage> {
-    verify_color_shape(color, 3, width, height)?;
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-
-    let mut output = RgbImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let r = sample_from_f32(color[[0, y, x]])?;
-            let g = sample_from_f32(color[[1, y, x]])?;
-            let b = sample_from_f32(color[[2, y, x]])?;
-            output.put_pixel(x_u32, y_u32, Rgb([r, g, b]));
-        }
-    }
-    Ok(output)
-}
-
-fn rebuild_rgba(
-    width: u32,
-    height: u32,
-    color: &Array3<f32>,
-    source: &RgbaImage,
-) -> Result<RgbaImage> {
-    verify_color_shape(color, 3, width, height)?;
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-
-    let mut output = RgbaImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let r = sample_from_f32(color[[0, y, x]])?;
-            let g = sample_from_f32(color[[1, y, x]])?;
-            let b = sample_from_f32(color[[2, y, x]])?;
-            let a = source.get_pixel(x_u32, y_u32)[3];
-            output.put_pixel(x_u32, y_u32, Rgba([r, g, b, a]));
-        }
-    }
-    Ok(output)
-}
-
-fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: u32) -> Result<()> {
-    let width = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-    if color.shape() != [channels, height, width] {
-        return Err(Error::DimensionMismatch);
-    }
-    if color.iter().any(|value| !value.is_finite()) {
-        return Err(Error::NonFiniteInput);
-    }
-    Ok(())
 }
 
 fn validate_config(config: KrylovConfig) -> Result<()> {
