@@ -14,7 +14,7 @@ use deconvolution::spectral::{
     RegularizedInverseFilter, TikhonovInverseFilter, UnsupervisedWiener, Wiener,
 };
 use deconvolution::{Padding, Transfer2D};
-use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgb, Rgba, RgbaImage};
 use ndarray::{array, Array2};
 use num_complex::Complex32;
 
@@ -435,6 +435,33 @@ fn wiener_preserves_rgba16_alpha() {
             }
         }
         _ => panic!("expected rgba16"),
+    }
+}
+
+#[test]
+fn wiener_preserves_rgb32f_variant() {
+    let rgb = ImageBuffer::<Rgb<f32>, Vec<f32>>::from_fn(11, 9, |x, y| {
+        Rgb([
+            0.05 + ((x as f32 * 0.07 + y as f32 * 0.03) % 0.8),
+            0.08 + ((x as f32 * 0.05 + y as f32 * 0.09) % 0.78),
+            0.11 + ((x as f32 * 0.04 + y as f32 * 0.06) % 0.74),
+        ])
+    });
+
+    let psf = delta2d((3, 3)).unwrap();
+    let restored = wiener(&DynamicImage::ImageRgb32F(rgb), &psf).unwrap();
+
+    match restored {
+        DynamicImage::ImageRgb32F(output) => {
+            assert_eq!(output.dimensions(), (11, 9));
+            assert!(output.pixels().all(|pixel| {
+                pixel[0].is_finite() && pixel[1].is_finite() && pixel[2].is_finite()
+            }));
+            assert!(output
+                .pixels()
+                .any(|pixel| pixel[0] > 0.0 || pixel[1] > 0.0 || pixel[2] > 0.0));
+        }
+        _ => panic!("expected rgb32f"),
     }
 }
 
