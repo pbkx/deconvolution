@@ -121,6 +121,63 @@ fn nd_known_psf_accepts_f16_arrays() {
     assert!(report.iterations >= 1);
 }
 
+#[cfg(feature = "f16")]
+#[test]
+fn nd_blind_richardson_lucy_accepts_f16_arrays() {
+    use half::f16;
+
+    let input_f32 = Array2::from_shape_fn((17, 19), |(y, x)| {
+        0.09 + (((y * 19 + x) as f32 * 0.019_531 + 0.246_8) % 0.82)
+    });
+    let psf_f32 = uniform((3, 3)).unwrap().as_array().to_owned();
+    let input = input_f32.mapv(f16::from_f32);
+    let psf = psf_f32.mapv(f16::from_f32);
+    let config = BlindRichardsonLucy::new()
+        .iterations(2)
+        .filter_epsilon(1e-3)
+        .collect_history(true);
+
+    let output = nd::blind::richardson_lucy_with(&input, &psf, &config).unwrap();
+    let output_f32 = nd::blind::richardson_lucy_with(&input_f32, &psf_f32, &config).unwrap();
+    let restored_as_f32 = output.image.mapv(f16::to_f32);
+
+    assert_eq!(output.image.dim(), input.dim());
+    assert!(restored_as_f32.iter().all(|value| value.is_finite()));
+    assert!(restored_as_f32.iter().any(|value| value.abs() > 0.0));
+    assert!(max_abs_diff_2d(&restored_as_f32, &output_f32.image).unwrap() < 3e-3);
+    assert_eq!(output.psf.dims(), output_f32.psf.dims());
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+}
+
+#[cfg(feature = "f16")]
+#[test]
+fn nd_blind_maximum_likelihood_accepts_f16_arrays() {
+    use deconvolution::blind::BlindMaximumLikelihood;
+    use half::f16;
+
+    let input_f32 = Array2::from_shape_fn((15, 17), |(y, x)| {
+        0.11 + (((y * 17 + x) as f32 * 0.017_089 + 0.357_9) % 0.78)
+    });
+    let psf_f32 = uniform((3, 3)).unwrap().as_array().to_owned();
+    let input = input_f32.mapv(f16::from_f32);
+    let psf = psf_f32.mapv(f16::from_f32);
+    let config = BlindMaximumLikelihood::new()
+        .iterations(2)
+        .filter_epsilon(1e-3)
+        .collect_history(true);
+
+    let output = nd::blind::maximum_likelihood_with(&input, &psf, &config).unwrap();
+    let output_f32 = nd::blind::maximum_likelihood_with(&input_f32, &psf_f32, &config).unwrap();
+    let restored_as_f32 = output.image.mapv(f16::to_f32);
+
+    assert_eq!(output.image.dim(), input.dim());
+    assert!(restored_as_f32.iter().all(|value| value.is_finite()));
+    assert!(restored_as_f32.iter().any(|value| value.abs() > 0.0));
+    assert!(max_abs_diff_2d(&restored_as_f32, &output_f32.image).unwrap() < 3e-3);
+    assert_eq!(output.psf.dims(), output_f32.psf.dims());
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+}
+
 #[test]
 fn blind_nd_path_returns_normalized_psf() {
     let sharp = checkerboard_2d((56, 56), 4, 0.0, 1.0).unwrap();

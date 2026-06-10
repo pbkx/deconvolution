@@ -1,7 +1,7 @@
-use image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA};
+use image::DynamicImage;
 use ndarray::Array2;
 
-use crate::core::color::{sample_from_f32, sample_to_f32};
+use crate::core::convert::{dynamic_luma_to_array2, rebuild_luma_dynamic_like};
 use crate::core::projections::project_nonnegative_2d;
 use crate::core::stopping::{check_stop, StopCriteria};
 use crate::core::validate::finite_real_2d;
@@ -91,9 +91,9 @@ pub fn richardson_lucy_with(
     initial_psf: &Kernel2D,
     config: &BlindRichardsonLucy,
 ) -> Result<BlindOutput<DynamicImage>> {
-    let observed = image_to_luma_array(image)?;
+    let observed = dynamic_luma_to_array2(image)?;
     let output = restore_array2(&observed, initial_psf, config)?;
-    let restored = luma_array_to_image(&output.image, image)?;
+    let restored = rebuild_luma_dynamic_like(image, &output.image)?;
     Ok(BlindOutput {
         image: restored,
         psf: output.psf,
@@ -212,103 +212,6 @@ fn initialize_psf(
     psf = apply_constraints(&psf, constraints)?;
     validate(&psf)?;
     Ok(psf)
-}
-
-fn image_to_luma_array(image: &DynamicImage) -> Result<Array2<f32>> {
-    match image {
-        DynamicImage::ImageLuma8(gray) => gray_to_array(gray),
-        DynamicImage::ImageLumaA8(gray_alpha) => gray_alpha_to_array(gray_alpha),
-        _ => Err(Error::UnsupportedPixelType),
-    }
-}
-
-fn luma_array_to_image(input: &Array2<f32>, source: &DynamicImage) -> Result<DynamicImage> {
-    match source {
-        DynamicImage::ImageLuma8(gray) => {
-            let rebuilt = array_to_gray(input, gray.width(), gray.height())?;
-            Ok(DynamicImage::ImageLuma8(rebuilt))
-        }
-        DynamicImage::ImageLumaA8(gray_alpha) => {
-            let rebuilt =
-                array_to_gray_alpha(input, gray_alpha.width(), gray_alpha.height(), gray_alpha)?;
-            Ok(DynamicImage::ImageLumaA8(rebuilt))
-        }
-        _ => Err(Error::UnsupportedPixelType),
-    }
-}
-
-fn gray_to_array(image: &GrayImage) -> Result<Array2<f32>> {
-    let width = usize::try_from(image.width()).map_err(|_| Error::DimensionMismatch)?;
-    let height = usize::try_from(image.height()).map_err(|_| Error::DimensionMismatch)?;
-    let mut output = Array2::zeros((height, width));
-    for y in 0..height {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0])?;
-        }
-    }
-    Ok(output)
-}
-
-fn gray_alpha_to_array(image: &GrayAlphaImage) -> Result<Array2<f32>> {
-    let width = usize::try_from(image.width()).map_err(|_| Error::DimensionMismatch)?;
-    let height = usize::try_from(image.height()).map_err(|_| Error::DimensionMismatch)?;
-    let mut output = Array2::zeros((height, width));
-    for y in 0..height {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            output[[y, x]] = sample_to_f32(image.get_pixel(x_u32, y_u32)[0])?;
-        }
-    }
-    Ok(output)
-}
-
-fn array_to_gray(input: &Array2<f32>, width: u32, height: u32) -> Result<GrayImage> {
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-    if input.dim() != (height_usize, width_usize) {
-        return Err(Error::DimensionMismatch);
-    }
-
-    let mut output = GrayImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let luma = sample_from_f32::<u8>(input[[y, x]])?;
-            output.put_pixel(x_u32, y_u32, Luma([luma]));
-        }
-    }
-
-    Ok(output)
-}
-
-fn array_to_gray_alpha(
-    input: &Array2<f32>,
-    width: u32,
-    height: u32,
-    source: &GrayAlphaImage,
-) -> Result<GrayAlphaImage> {
-    let width_usize = usize::try_from(width).map_err(|_| Error::DimensionMismatch)?;
-    let height_usize = usize::try_from(height).map_err(|_| Error::DimensionMismatch)?;
-    if input.dim() != (height_usize, width_usize) {
-        return Err(Error::DimensionMismatch);
-    }
-
-    let mut output = GrayAlphaImage::new(width, height);
-    for y in 0..height_usize {
-        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
-        for x in 0..width_usize {
-            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
-            let luma = sample_from_f32::<u8>(input[[y, x]])?;
-            let alpha = source.get_pixel(x_u32, y_u32)[1];
-            output.put_pixel(x_u32, y_u32, LumaA([luma, alpha]));
-        }
-    }
-
-    Ok(output)
 }
 
 fn multiplicative_ratio(

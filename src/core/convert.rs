@@ -385,6 +385,145 @@ pub(crate) fn rebuild_dynamic_like(
     }
 }
 
+pub(crate) fn dynamic_luma_to_array2(image: &DynamicImage) -> Result<Array2<f32>> {
+    match image {
+        DynamicImage::ImageLuma8(luma) => luma_view_to_array2(luma),
+        DynamicImage::ImageLumaA8(luma_alpha) => luma_alpha_view_to_array2(luma_alpha),
+        DynamicImage::ImageLuma16(luma) => luma_view_to_array2(luma),
+        DynamicImage::ImageLumaA16(luma_alpha) => luma_alpha_view_to_array2(luma_alpha),
+        _ => Err(Error::UnsupportedPixelType),
+    }
+}
+
+pub(crate) fn rebuild_luma_dynamic_like(
+    source: &DynamicImage,
+    restored: &Array2<f32>,
+) -> Result<DynamicImage> {
+    match source {
+        DynamicImage::ImageLuma8(luma) => {
+            let rebuilt = rebuild_luma_array::<u8>(luma.width(), luma.height(), restored)?;
+            Ok(DynamicImage::ImageLuma8(rebuilt))
+        }
+        DynamicImage::ImageLumaA8(luma_alpha) => {
+            let rebuilt = rebuild_luma_alpha_array::<u8>(
+                luma_alpha.width(),
+                luma_alpha.height(),
+                restored,
+                luma_alpha,
+            )?;
+            Ok(DynamicImage::ImageLumaA8(rebuilt))
+        }
+        DynamicImage::ImageLuma16(luma) => {
+            let rebuilt = rebuild_luma_array::<u16>(luma.width(), luma.height(), restored)?;
+            Ok(DynamicImage::ImageLuma16(rebuilt))
+        }
+        DynamicImage::ImageLumaA16(luma_alpha) => {
+            let rebuilt = rebuild_luma_alpha_array::<u16>(
+                luma_alpha.width(),
+                luma_alpha.height(),
+                restored,
+                luma_alpha,
+            )?;
+            Ok(DynamicImage::ImageLumaA16(rebuilt))
+        }
+        _ => Err(Error::UnsupportedPixelType),
+    }
+}
+
+fn luma_view_to_array2<I, S>(image: &I) -> Result<Array2<f32>>
+where
+    I: GenericImageView<Pixel = Luma<S>>,
+    S: PixelSample + Primitive,
+{
+    let (width, height) = image.dimensions();
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+    if width_usize == 0 || height_usize == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let mut output = Array2::zeros((height_usize, width_usize));
+    for (x, y, pixel) in image.pixels() {
+        let x = to_usize(x)?;
+        let y = to_usize(y)?;
+        output[[y, x]] = sample_to_f32(pixel[0])?;
+    }
+    Ok(output)
+}
+
+fn luma_alpha_view_to_array2<I, S>(image: &I) -> Result<Array2<f32>>
+where
+    I: GenericImageView<Pixel = LumaA<S>>,
+    S: PixelSample + Primitive,
+{
+    let (width, height) = image.dimensions();
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+    if width_usize == 0 || height_usize == 0 {
+        return Err(Error::EmptyImage);
+    }
+
+    let mut output = Array2::zeros((height_usize, width_usize));
+    for (x, y, pixel) in image.pixels() {
+        let x = to_usize(x)?;
+        let y = to_usize(y)?;
+        output[[y, x]] = sample_to_f32(pixel[0])?;
+    }
+    Ok(output)
+}
+
+fn rebuild_luma_array<S>(
+    width: u32,
+    height: u32,
+    restored: &Array2<f32>,
+) -> Result<ImageBuffer<Luma<S>, Vec<S>>>
+where
+    Luma<S>: image::Pixel<Subpixel = S> + 'static,
+    S: PixelSample + Primitive + 'static,
+{
+    verify_luma_shape(restored, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = ImageBuffer::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let luma = sample_from_f32::<S>(restored[[y, x]])?;
+            output.put_pixel(x_u32, y_u32, Luma([luma]));
+        }
+    }
+    Ok(output)
+}
+
+fn rebuild_luma_alpha_array<S>(
+    width: u32,
+    height: u32,
+    restored: &Array2<f32>,
+    source: &ImageBuffer<LumaA<S>, Vec<S>>,
+) -> Result<ImageBuffer<LumaA<S>, Vec<S>>>
+where
+    LumaA<S>: image::Pixel<Subpixel = S> + 'static,
+    S: PixelSample + Primitive + 'static,
+{
+    verify_luma_shape(restored, width, height)?;
+    let width_usize = to_usize(width)?;
+    let height_usize = to_usize(height)?;
+
+    let mut output = ImageBuffer::new(width, height);
+    for y in 0..height_usize {
+        let y_u32 = u32::try_from(y).map_err(|_| Error::DimensionMismatch)?;
+        for x in 0..width_usize {
+            let x_u32 = u32::try_from(x).map_err(|_| Error::DimensionMismatch)?;
+            let luma = sample_from_f32::<S>(restored[[y, x]])?;
+            let alpha = source.get_pixel(x_u32, y_u32)[1];
+            output.put_pixel(x_u32, y_u32, LumaA([luma, alpha]));
+        }
+    }
+    Ok(output)
+}
+
 fn rebuild_luma<S>(
     width: u32,
     height: u32,
@@ -500,6 +639,18 @@ fn verify_color_shape(color: &Array3<f32>, channels: usize, width: u32, height: 
         return Err(Error::DimensionMismatch);
     }
     if color.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(())
+}
+
+fn verify_luma_shape(restored: &Array2<f32>, width: u32, height: u32) -> Result<()> {
+    let width = to_usize(width)?;
+    let height = to_usize(height)?;
+    if restored.shape() != [height, width] {
+        return Err(Error::DimensionMismatch);
+    }
+    if restored.iter().any(|value| !value.is_finite()) {
         return Err(Error::NonFiniteInput);
     }
     Ok(())

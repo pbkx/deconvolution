@@ -263,6 +263,8 @@ Configuration types:
 ### Blind Deconvolution
 
 Blind workflows estimate both the restored image and the PSF.
+Image-facing blind workflows support Gray and GrayAlpha `DynamicImage` variants
+for u8 and u16 samples.
 
 - `blind::richardson_lucy`
 - `blind::maximum_likelihood`
@@ -296,7 +298,7 @@ Parametric PSF families:
 The public `nd` module exposes array-first workflows for users who already work
 in ndarray or need 3D volumes.
 Enable the optional `f16` feature to pass `half::f16` arrays into the 2D
-known-PSF ndarray API while keeping computation in `f32`.
+ndarray API while keeping computation in `f32`.
 
 2D known-PSF methods in `nd::known_psf`:
 
@@ -361,8 +363,7 @@ Synthetic fixtures:
 ### Optional rayon Integration
 
 `rayon` is enabled by default. The optional `f16` feature adds `half::f16`
-input/output support for the 2D known-PSF ndarray API; computation remains
-`f32`.
+input/output support for the 2D ndarray API; computation remains in `f32`.
 
 ```toml
 [features]
@@ -426,6 +427,8 @@ cargo doc --workspace --no-deps --all-features
 
 - Known-PSF image-facing algorithms support u8/u16 Gray, GrayAlpha, Rgb, and Rgba
   `DynamicImage` variants, plus 32-bit float Rgb and Rgba images.
+- Blind image-facing algorithms support u8/u16 Gray and GrayAlpha
+  `DynamicImage` variants.
 - Deconvolution quality depends heavily on the PSF, boundary assumptions, and
   regularization strength.
 - Aggressive inverse filtering can amplify noise and ringing; prefer Wiener,

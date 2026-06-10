@@ -11,7 +11,7 @@ use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::{Error, Kernel2D, StopReason};
-use image::{DynamicImage, GrayImage, Luma};
+use image::{DynamicImage, GrayImage, ImageBuffer, Luma, LumaA, RgbImage, RgbaImage};
 use ndarray::{array, Array2};
 
 #[test]
@@ -252,6 +252,68 @@ fn blind_richardson_lucy_support_mask_is_enforced() {
 }
 
 #[test]
+fn blind_richardson_lucy_preserves_luma16_variant() {
+    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_fn(13, 11, |x, y| {
+        Luma([1024 + ((x * 137 + y * 211) % 45_000) as u16])
+    });
+    let input = DynamicImage::ImageLuma16(image);
+    let initial_psf = uniform((3, 3)).unwrap();
+
+    let output = richardson_lucy_with(
+        &input,
+        &initial_psf,
+        &BlindRichardsonLucy::new()
+            .iterations(2)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    match output.image {
+        DynamicImage::ImageLuma16(restored) => {
+            assert_eq!(restored.dimensions(), (13, 11));
+            assert!(restored.pixels().any(|pixel| pixel[0] > 0));
+        }
+        _ => panic!("expected luma16"),
+    }
+    assert_eq!(output.psf.dims(), initial_psf.dims());
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+    assert!(output.report.iterations >= 1);
+}
+
+#[test]
+fn blind_richardson_lucy_preserves_luma_a16_alpha() {
+    let image = ImageBuffer::<LumaA<u16>, Vec<u16>>::from_fn(9, 7, |x, y| {
+        LumaA([
+            2048 + ((x * 503 + y * 97) % 40_000) as u16,
+            ((x * 4096 + y * 2048) % 65_536) as u16,
+        ])
+    });
+    let input = DynamicImage::ImageLumaA16(image.clone());
+    let initial_psf = uniform((1, 1)).unwrap();
+
+    let output = richardson_lucy_with(
+        &input,
+        &initial_psf,
+        &BlindRichardsonLucy::new()
+            .iterations(1)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    match output.image {
+        DynamicImage::ImageLumaA16(restored) => {
+            assert_eq!(restored.dimensions(), image.dimensions());
+            for (source, output) in image.pixels().zip(restored.pixels()) {
+                assert_eq!(source[1], output[1]);
+            }
+        }
+        _ => panic!("expected lumaA16"),
+    }
+}
+
+#[test]
 fn blind_richardson_lucy_is_deterministic() {
     let sharp = checkerboard_2d((52, 52), 4, 0.0, 1.0).unwrap();
     let true_psf = motion_linear(9.0, 20.0).unwrap();
@@ -399,6 +461,68 @@ fn blind_parametric_motion_estimate_improves_over_initial_guess() {
 
     let default_path = parametric(&degraded_image, initial_model, true_psf.dims()).unwrap();
     assert_eq!(default_path.psf.dims(), true_psf.dims());
+}
+
+#[test]
+fn blind_parametric_preserves_luma16_variant() {
+    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_fn(15, 13, |x, y| {
+        Luma([4096 + ((x * 251 + y * 433) % 32_000) as u16])
+    });
+    let input = DynamicImage::ImageLuma16(image);
+
+    let output = parametric_with(
+        &input,
+        ParametricPsf::Gaussian { sigma: 1.2 },
+        (3, 3),
+        &BlindParametric::new()
+            .iterations(1)
+            .image_iterations(1)
+            .filter_epsilon(1e-3)
+            .collect_history(true),
+    )
+    .unwrap();
+
+    match output.image {
+        DynamicImage::ImageLuma16(restored) => {
+            assert_eq!(restored.dimensions(), (15, 13));
+            assert!(restored.pixels().any(|pixel| pixel[0] > 0));
+        }
+        _ => panic!("expected luma16"),
+    }
+    assert_eq!(output.psf.dims(), (3, 3));
+    assert!((output.psf.sum() - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn blind_image_api_rejects_rgb_and_rgba_inputs() {
+    let initial_psf = uniform((1, 1)).unwrap();
+    let rgb = DynamicImage::ImageRgb8(RgbImage::new(5, 5));
+    let rgba = DynamicImage::ImageRgba8(RgbaImage::new(5, 5));
+
+    assert_eq!(
+        richardson_lucy_with(
+            &rgb,
+            &initial_psf,
+            &BlindRichardsonLucy::new()
+                .iterations(1)
+                .filter_epsilon(1e-3)
+        )
+        .unwrap_err(),
+        Error::UnsupportedPixelType
+    );
+    assert_eq!(
+        parametric_with(
+            &rgba,
+            ParametricPsf::Gaussian { sigma: 1.0 },
+            (3, 3),
+            &BlindParametric::new()
+                .iterations(1)
+                .image_iterations(1)
+                .filter_epsilon(1e-3)
+        )
+        .unwrap_err(),
+        Error::UnsupportedPixelType
+    );
 }
 
 #[test]
