@@ -46,10 +46,10 @@ pub(crate) fn check_stop(
         if !update.is_finite() {
             return Err(Error::NonFiniteInput);
         }
-        if let Some(tol) = criteria.relative_update_tol {
-            if update <= tol {
-                return Ok(Some(StopReason::RelativeUpdate));
-            }
+        if let Some(tol) = criteria.relative_update_tol
+            && update <= tol
+        {
+            return Ok(Some(StopReason::RelativeUpdate));
         }
     }
 
@@ -68,10 +68,10 @@ fn validate_criteria(criteria: &StopCriteria) -> Result<()> {
     if criteria.max_iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = criteria.relative_update_tol {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = criteria.relative_update_tol
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !criteria.objective_plateau_tol.is_finite() || criteria.objective_plateau_tol < 0.0 {
         return Err(Error::InvalidParameter);
@@ -132,7 +132,7 @@ fn is_diverging(criteria: &StopCriteria, history: &[f32]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_stop, StopCriteria, StopReason};
+    use super::{StopCriteria, StopReason, check_stop};
 
     #[test]
     fn max_iterations_trigger_is_detected() {

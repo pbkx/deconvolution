@@ -1,16 +1,16 @@
 mod common;
 
-use deconvolution::iterative::{richardson_lucy_with, RichardsonLucy};
+use deconvolution::Error;
+use deconvolution::iterative::{RichardsonLucy, richardson_lucy_with};
 use deconvolution::nd;
-use deconvolution::optimization::{cmle_with, gmle_with, qmle_with, Cmle, Gmle, Qmle};
+use deconvolution::optimization::{Cmle, Gmle, Qmle, cmle_with, gmle_with, qmle_with};
 use deconvolution::otf::convert::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d};
-use deconvolution::psf::basic::{gaussian2d, gaussian3d};
 use deconvolution::psf::Kernel3D;
+use deconvolution::psf::basic::{gaussian2d, gaussian3d};
 use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::{checkerboard_2d, gaussian_blob_2d, phantom_3d};
-use deconvolution::spectral::{wiener_with, Wiener};
-use deconvolution::Error;
+use deconvolution::spectral::{Wiener, wiener_with};
 use image::{DynamicImage, Rgba, RgbaImage};
 use ndarray::{Array3, Axis};
 

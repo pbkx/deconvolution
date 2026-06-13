@@ -1,18 +1,18 @@
 use deconvolution::blind::{
-    maximum_likelihood, maximum_likelihood_with, parametric, parametric_with, richardson_lucy,
-    richardson_lucy_with, BlindMaximumLikelihood, BlindOutput, BlindParametric, BlindReport,
-    BlindRichardsonLucy, ParametricPsf,
+    BlindMaximumLikelihood, BlindOutput, BlindParametric, BlindReport, BlindRichardsonLucy,
+    ParametricPsf, maximum_likelihood, maximum_likelihood_with, parametric, parametric_with,
+    richardson_lucy, richardson_lucy_with,
 };
+use deconvolution::psf::PsfConstraint;
 use deconvolution::psf::basic::motion_linear;
 use deconvolution::psf::constraints::{apply_constraint, apply_constraints};
 use deconvolution::psf::init::uniform;
-use deconvolution::psf::PsfConstraint;
 use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::{Error, Kernel2D, StopReason};
 use image::{DynamicImage, GrayImage, ImageBuffer, Luma, LumaA, RgbImage, RgbaImage};
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 
 #[test]
 fn blind_output_and_report_structs_are_usable() {
@@ -72,10 +72,12 @@ fn constraints_can_be_composed_for_valid_projected_psf() {
     ];
     let projected = apply_constraints(&psf, &constraints).unwrap();
 
-    assert!(projected
-        .as_array()
-        .iter()
-        .all(|value| *value >= 0.0 && value.is_finite()));
+    assert!(
+        projected
+            .as_array()
+            .iter()
+            .all(|value| *value >= 0.0 && value.is_finite())
+    );
     assert_eq!(projected.as_array()[[0, 1]], 0.0);
     assert_eq!(projected.as_array()[[1, 1]], 0.0);
     assert!((projected.sum() - 1.0).abs() < 1e-6);

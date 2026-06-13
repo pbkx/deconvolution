@@ -7,7 +7,7 @@ use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::{checkerboard_2d, phantom_3d};
 use deconvolution::spectral::Wiener;
-use deconvolution::{blind::BlindRichardsonLucy, Error, Kernel2D, Result};
+use deconvolution::{Error, Kernel2D, Result, blind::BlindRichardsonLucy};
 use ndarray::{Array2, Array3, Axis};
 
 #[test]

@@ -4,8 +4,8 @@ use ndarray::Array2;
 use crate::psf::{Kernel2D, PsfConstraint};
 use crate::{Error, Result};
 
-use super::rl::{restore_poisson_em_array2, restore_poisson_em_dynamic, BlindPoissonEm};
 use super::BlindOutput;
+use super::rl::{BlindPoissonEm, restore_poisson_em_array2, restore_poisson_em_dynamic};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlindMaximumLikelihood {
@@ -114,10 +114,10 @@ fn validate_config(config: &BlindMaximumLikelihood) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);

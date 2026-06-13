@@ -1,11 +1,12 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use deconvolution::psf::basic::gaussian2d;
 use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_gaussian_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
-use deconvolution::spectral::{unsupervised_wiener_with, wiener_with, UnsupervisedWiener, Wiener};
+use deconvolution::spectral::{UnsupervisedWiener, Wiener, unsupervised_wiener_with, wiener_with};
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
+use std::hint::black_box;
 
 fn bench_spectral(c: &mut Criterion) {
     let (image, psf) = degraded_fixture().expect("fixture");

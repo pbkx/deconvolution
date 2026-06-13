@@ -1,7 +1,7 @@
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, LumaA, Primitive, Rgb, Rgba};
 use ndarray::{Array2, Array3, Axis};
 
-use super::color::{sample_from_f32, sample_to_f32, PixelLayout, PixelSample, SampleKind};
+use super::color::{PixelLayout, PixelSample, SampleKind, sample_from_f32, sample_to_f32};
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -679,7 +679,7 @@ mod tests {
         RgbImage, Rgba, RgbaImage,
     };
 
-    use super::{rebuild_dynamic_like, PlanarImage};
+    use super::{PlanarImage, rebuild_dynamic_like};
     use crate::Error;
 
     #[test]

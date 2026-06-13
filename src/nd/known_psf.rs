@@ -1,6 +1,6 @@
 use ndarray::Array2;
 
-use super::convert::{array2_from_f32, array2_to_f32, kernel2_from_samples, NdSample};
+use super::convert::{NdSample, array2_from_f32, array2_to_f32, kernel2_from_samples};
 use crate::algorithms;
 use crate::iterative::{
     Ictm, Landweber, RichardsonLucy, RichardsonLucyTv, TikhonovMiller, VanCittert,

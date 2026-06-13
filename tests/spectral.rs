@@ -8,14 +8,14 @@ use deconvolution::simulate::phantom::{
     checkerboard_2d, gaussian_blob_2d, phantom_3d, rgb_edges_2d,
 };
 use deconvolution::spectral::{
-    inverse_filter, inverse_filter_with, naive_inverse_filter, regularized_inverse_filter_with,
-    tikhonov_inverse_filter_with, truncated_inverse_filter_with, unsupervised_wiener,
-    unsupervised_wiener_with, wiener, wiener_with, InverseFilter, RegOperator2D,
-    RegularizedInverseFilter, TikhonovInverseFilter, UnsupervisedWiener, Wiener,
+    InverseFilter, RegOperator2D, RegularizedInverseFilter, TikhonovInverseFilter,
+    UnsupervisedWiener, Wiener, inverse_filter, inverse_filter_with, naive_inverse_filter,
+    regularized_inverse_filter_with, tikhonov_inverse_filter_with, truncated_inverse_filter_with,
+    unsupervised_wiener, unsupervised_wiener_with, wiener, wiener_with,
 };
 use deconvolution::{Padding, Transfer2D};
 use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgb, Rgba, RgbaImage};
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 use num_complex::Complex32;
 
 use common::{arrays_differ_2d, arrays_equal_2d, arrays_equal_3d, is_finite_2d, is_finite_3d};
@@ -457,9 +457,11 @@ fn wiener_preserves_rgb32f_variant() {
             assert!(output.pixels().all(|pixel| {
                 pixel[0].is_finite() && pixel[1].is_finite() && pixel[2].is_finite()
             }));
-            assert!(output
-                .pixels()
-                .any(|pixel| pixel[0] > 0.0 || pixel[1] > 0.0 || pixel[2] > 0.0));
+            assert!(
+                output
+                    .pixels()
+                    .any(|pixel| pixel[0] > 0.0 || pixel[1] > 0.0 || pixel[2] > 0.0)
+            );
         }
         _ => panic!("expected rgb32f"),
     }

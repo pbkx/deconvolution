@@ -1,7 +1,7 @@
 use image::DynamicImage;
 use ndarray::Array2;
 
-use super::rl::{run_poisson_em, run_poisson_em_array2, PoissonEm, PoissonRegularization};
+use super::rl::{PoissonEm, PoissonRegularization, run_poisson_em, run_poisson_em_array2};
 use crate::{ChannelMode, Error, Kernel2D, RangePolicy, Result, SolveReport};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -395,10 +395,10 @@ fn validate_cmle(config: &Cmle) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);
@@ -412,10 +412,10 @@ fn validate_gmle(config: &Gmle) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);
@@ -435,10 +435,10 @@ fn validate_qmle(config: &Qmle) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);

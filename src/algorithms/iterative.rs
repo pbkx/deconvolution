@@ -2,15 +2,15 @@ use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
 
 use crate::core::conv::Convolution2D;
-use crate::core::convert::{rebuild_dynamic_like, PlanarImage};
+use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
 use crate::core::diagnostics::Diagnostics;
-use crate::core::operator::{inner_product_2d, LinearOperator2D};
+use crate::core::operator::{LinearOperator2D, inner_product_2d};
 use crate::core::projections::project_nonnegative_2d;
 use crate::core::regularizer::RegOperator2D;
-use crate::core::stopping::{check_stop, StopCriteria};
+use crate::core::stopping::{StopCriteria, check_stop};
 use crate::preprocess::normalize_range;
-use crate::psf::support::validate;
 use crate::psf::Kernel2D;
+use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1170,18 +1170,18 @@ fn validate_config(config: IterativeConfig, method: IterativeMethod) -> Result<(
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if let Some(step_size) = config.step_size {
         validate_step_size(step_size)?;
     }
-    if let IterativeMethod::TikhonovMiller { lambda, .. } = method {
-        if !lambda.is_finite() || lambda < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let IterativeMethod::TikhonovMiller { lambda, .. } = method
+        && (!lambda.is_finite() || lambda < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     Ok(())
 }

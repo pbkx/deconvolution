@@ -3,14 +3,14 @@ use ndarray::{Array2, Array3, Axis};
 
 use super::proximal::tv_regularize_step_2d;
 use crate::core::conv::Convolution2D;
-use crate::core::convert::{rebuild_dynamic_like, PlanarImage};
+use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
 use crate::core::diagnostics::Diagnostics;
 use crate::core::operator::LinearOperator2D;
 use crate::core::projections::project_nonnegative_2d;
-use crate::core::stopping::{check_stop, StopCriteria};
+use crate::core::stopping::{StopCriteria, check_stop};
 use crate::preprocess::normalize_range;
-use crate::psf::support::validate;
 use crate::psf::Kernel2D;
+use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -929,29 +929,28 @@ pub(crate) fn validate_poisson_em_config(config: &PoissonEm) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(damping) = config.damping {
-        if !damping.is_finite() || damping < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(damping) = config.damping
+        && (!damping.is_finite() || damping < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.readout_noise.is_finite() || config.readout_noise < 0.0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(weights) = config.weights.as_ref() {
-        if weights
+    if let Some(weights) = config.weights.as_ref()
+        && weights
             .iter()
             .any(|value| !value.is_finite() || *value < 0.0 || *value > 1.0)
-        {
-            return Err(Error::InvalidParameter);
-        }
+    {
+        return Err(Error::InvalidParameter);
     }
     Ok(())
 }

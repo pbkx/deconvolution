@@ -1,6 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use deconvolution::iterative::{
-    richardson_lucy_tv_with, richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
+    RichardsonLucy, RichardsonLucyTv, richardson_lucy_tv_with, richardson_lucy_with,
 };
 use deconvolution::psf::basic::gaussian2d;
 use deconvolution::simulate::blur::blur;
@@ -8,6 +8,7 @@ use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
+use std::hint::black_box;
 
 fn bench_rl(c: &mut Criterion) {
     let (image, psf) = degraded_fixture().expect("fixture");

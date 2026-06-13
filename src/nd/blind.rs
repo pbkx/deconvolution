@@ -1,8 +1,8 @@
 use ndarray::Array2;
 
-use super::convert::{array2_from_f32, array2_to_f32, kernel2_from_samples, NdSample};
-use crate::blind::{BlindMaximumLikelihood, BlindOutput, BlindRichardsonLucy};
+use super::convert::{NdSample, array2_from_f32, array2_to_f32, kernel2_from_samples};
 use crate::Result;
+use crate::blind::{BlindMaximumLikelihood, BlindOutput, BlindRichardsonLucy};
 
 pub fn richardson_lucy<T: NdSample>(
     image: &Array2<T>,

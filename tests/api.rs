@@ -1,11 +1,11 @@
 use deconvolution::{
+    Boundary, ChannelMode, Error, Padding, RangePolicy, SolveReport, StopReason,
     prelude::{
         Boundary as PreludeBoundary, ChannelMode as PreludeChannelMode, Error as PreludeError,
         Padding as PreludePadding, RangePolicy as PreludeRangePolicy, Result as PreludeResult,
         SolveReport as PreludeSolveReport, StopReason as PreludeStopReason,
     },
     spectral::RegOperator2D,
-    Boundary, ChannelMode, Error, Padding, RangePolicy, SolveReport, StopReason,
 };
 use ndarray::array;
 

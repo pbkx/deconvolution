@@ -878,10 +878,6 @@ fn bessel_j1(x: f32) -> f32 {
             + y * (-0.000_200_269_09
                 + y * (0.000_008_449_199 + y * (-0.000_000_882_289_9 + y * 0.000_000_105_787_41)));
         let value = (0.636_619_75 / ax).sqrt() * (xx.cos() * ans1 - z * xx.sin() * ans2);
-        if x < 0.0 {
-            -value
-        } else {
-            value
-        }
+        if x < 0.0 { -value } else { value }
     }
 }

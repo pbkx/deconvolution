@@ -3,10 +3,10 @@ use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_gaussian_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::spectral::{
-    regularized_inverse_filter_with, RegOperator2D, RegularizedInverseFilter,
+    RegOperator2D, RegularizedInverseFilter, regularized_inverse_filter_with,
 };
 use image::{DynamicImage, GrayImage, Luma};
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let sharp = checkerboard_2d((128, 128), 8, 0.0, 1.0)?;

@@ -2,14 +2,14 @@ use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
 
 use crate::core::conv::Convolution2D;
-use crate::core::convert::{rebuild_dynamic_like, PlanarImage};
+use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
 use crate::core::diagnostics::Diagnostics;
-use crate::core::operator::{inner_product_2d, LinearOperator2D};
+use crate::core::operator::{LinearOperator2D, inner_product_2d};
 use crate::core::projections::{project_bounds_2d, project_nonnegative_2d};
-use crate::core::stopping::{check_stop, StopCriteria};
+use crate::core::stopping::{StopCriteria, check_stop};
 use crate::preprocess::normalize_range;
-use crate::psf::support::validate;
 use crate::psf::Kernel2D;
+use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -812,10 +812,10 @@ fn validate_config(config: ConstrainedConfig, constraint: Constraint) -> Result<
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if let Some(step_size) = config.step_size {
         validate_step_size(step_size)?;
@@ -824,10 +824,9 @@ fn validate_config(config: ConstrainedConfig, constraint: Constraint) -> Result<
         lower_bound,
         upper_bound,
     } = constraint
+        && (!lower_bound.is_finite() || !upper_bound.is_finite() || lower_bound > upper_bound)
     {
-        if !lower_bound.is_finite() || !upper_bound.is_finite() || lower_bound > upper_bound {
-            return Err(Error::InvalidParameter);
-        }
+        return Err(Error::InvalidParameter);
     }
     Ok(())
 }

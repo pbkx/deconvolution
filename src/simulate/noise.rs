@@ -1,6 +1,6 @@
 use ndarray::Array2;
-use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rand_distr::{Distribution, Normal, Poisson};
 
 use crate::{Error, Result};

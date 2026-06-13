@@ -2,17 +2,17 @@ use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
 use num_complex::Complex32;
 
-use crate::core::convert::{rebuild_dynamic_like, PlanarImage};
+use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
 use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
 use crate::core::plan_cache::PlanCache;
-use crate::core::regularizer::spectral_response_2d;
 use crate::core::regularizer::RegOperator2D;
+use crate::core::regularizer::spectral_response_2d;
 use crate::core::util::next_fast_len;
-use crate::otf::convert::psf2otf;
 use crate::otf::Transfer2D;
+use crate::otf::convert::psf2otf;
 use crate::preprocess::normalize_range;
-use crate::psf::support::validate;
 use crate::psf::Kernel2D;
+use crate::psf::support::validate;
 use crate::{Error, Padding, RangePolicy, Result};
 
 #[derive(Debug, Clone, PartialEq)]

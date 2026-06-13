@@ -1,5 +1,5 @@
-use ndarray::array;
 use ndarray::Array2;
+use ndarray::array;
 
 use crate::preprocess::padding::convolve_same_2d;
 use crate::{Boundary, Error, Result};

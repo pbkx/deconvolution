@@ -3,7 +3,7 @@ use ndarray::Array2;
 
 use crate::core::convert::{dynamic_luma_to_array2, rebuild_luma_dynamic_like};
 use crate::core::projections::project_nonnegative_2d;
-use crate::core::stopping::{check_stop, StopCriteria};
+use crate::core::stopping::{StopCriteria, check_stop};
 use crate::core::validate::finite_real_2d;
 use crate::psf::constraints::apply_constraints;
 use crate::psf::support::{flip, validate};
@@ -427,10 +427,10 @@ pub(crate) fn validate_blind_poisson_em_config(config: &BlindPoissonEm) -> Resul
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
-    if let Some(tol) = config.relative_update_tolerance {
-        if !tol.is_finite() || tol < 0.0 {
-            return Err(Error::InvalidParameter);
-        }
+    if let Some(tol) = config.relative_update_tolerance
+        && (!tol.is_finite() || tol < 0.0)
+    {
+        return Err(Error::InvalidParameter);
     }
     if !config.filter_epsilon.is_finite() || config.filter_epsilon <= 0.0 {
         return Err(Error::InvalidParameter);

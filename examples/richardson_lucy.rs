@@ -1,4 +1,4 @@
-use deconvolution::iterative::{richardson_lucy_with, RichardsonLucy};
+use deconvolution::iterative::{RichardsonLucy, richardson_lucy_with};
 use deconvolution::psf::basic::gaussian2d;
 use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::noise::add_poisson_noise;

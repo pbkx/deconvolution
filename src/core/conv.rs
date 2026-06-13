@@ -268,15 +268,15 @@ fn to_i64(value: usize) -> Result<i64> {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, Array2, Array3};
+    use ndarray::{Array2, Array3, array};
 
     use super::{Convolution2D, Convolution3D};
-    use crate::core::operator::{
-        inner_product_2d, inner_product_3d, LinearOperator2D, LinearOperator3D,
-    };
-    use crate::simulate::blur::blur;
     use crate::Kernel2D;
     use crate::Kernel3D;
+    use crate::core::operator::{
+        LinearOperator2D, LinearOperator3D, inner_product_2d, inner_product_3d,
+    };
+    use crate::simulate::blur::blur;
 
     #[test]
     fn convolution_2d_matches_fft_blur_for_asymmetric_kernel() {

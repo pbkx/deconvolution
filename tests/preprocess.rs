@@ -1,7 +1,7 @@
 use deconvolution::preprocess::apodize::window_edges;
 use deconvolution::preprocess::{apodize, edgetaper, estimate_nsr, normalize_range};
 use deconvolution::{Kernel2D, RangePolicy};
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 
 #[test]
 fn window_edges_reduces_border_discontinuity_on_step_fixture() {
@@ -61,9 +61,11 @@ fn apodize_and_normalize_range_preserve_dimensions_and_finiteness() {
     assert!(clamped01.iter().all(|value| *value >= 0.0 && *value <= 1.0));
 
     let clamped11 = normalize_range(&apodized, RangePolicy::ClampNegPos1).unwrap();
-    assert!(clamped11
-        .iter()
-        .all(|value| *value >= -1.0 && *value <= 1.0));
+    assert!(
+        clamped11
+            .iter()
+            .all(|value| *value >= -1.0 && *value <= 1.0)
+    );
 }
 
 fn step_fixture(height: usize, width: usize) -> Array2<f32> {

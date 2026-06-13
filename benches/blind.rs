@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use deconvolution::blind::{richardson_lucy_with, BlindRichardsonLucy};
+use criterion::{Criterion, criterion_group, criterion_main};
+use deconvolution::blind::{BlindRichardsonLucy, richardson_lucy_with};
 use deconvolution::psf::basic::motion_linear;
 use deconvolution::psf::init::uniform;
 use deconvolution::simulate::blur::blur;
@@ -7,6 +7,7 @@ use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::checkerboard_2d;
 use image::{DynamicImage, GrayImage, Luma};
 use ndarray::Array2;
+use std::hint::black_box;
 
 fn bench_blind(c: &mut Criterion) {
     let (image, initial_psf) = degraded_fixture().expect("fixture");

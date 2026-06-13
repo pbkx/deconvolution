@@ -6,9 +6,8 @@ use deconvolution::psf::basic::{
 };
 use deconvolution::psf::init::{from_support, gaussian_guess, motion_guess, uniform};
 use deconvolution::psf::microscopy::{
-    astigmatic, born_wolf, double_helix, gibson_lanni, lorentz2d, richards_wolf,
-    variable_ri_gibson_lanni, BornWolfParams, GibsonLanniParams, RichardsWolfParams,
-    VariableRiGibsonLanniParams,
+    BornWolfParams, GibsonLanniParams, RichardsWolfParams, VariableRiGibsonLanniParams, astigmatic,
+    born_wolf, double_helix, gibson_lanni, lorentz2d, richards_wolf, variable_ri_gibson_lanni,
 };
 use deconvolution::psf::support::{
     center, center_3d, crop_to, crop_to_3d, flip, flip_3d, normalize, normalize_3d, pad_to,
@@ -17,11 +16,11 @@ use deconvolution::psf::support::{
 use deconvolution::simulate::blur::{blur, blur_otf};
 use deconvolution::simulate::phantom::checkerboard_2d;
 use deconvolution::{
+    Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
     prelude::{Kernel2D as PreludeKernel2D, Transfer2D as PreludeTransfer2D},
     psf::{Blur2D, Blur3D},
-    Error, Kernel2D, Kernel3D, Transfer2D, Transfer3D,
 };
-use ndarray::{array, Array2};
+use ndarray::{Array2, array};
 use num_complex::Complex32;
 
 #[test]
@@ -565,9 +564,5 @@ fn specialty_model_parameter_validation_rejects_invalid_inputs() {
 }
 
 fn wrap_neg(index: usize, size: usize) -> usize {
-    if index == 0 {
-        0
-    } else {
-        size - index
-    }
+    if index == 0 { 0 } else { size - index }
 }

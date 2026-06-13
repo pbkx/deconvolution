@@ -1,4 +1,4 @@
-use deconvolution::blind::{richardson_lucy_with, BlindRichardsonLucy};
+use deconvolution::blind::{BlindRichardsonLucy, richardson_lucy_with};
 use deconvolution::psf::basic::motion_linear;
 use deconvolution::psf::init::uniform;
 use deconvolution::simulate::blur::blur;

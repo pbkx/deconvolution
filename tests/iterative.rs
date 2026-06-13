@@ -1,13 +1,13 @@
 use deconvolution::iterative::{
+    Ictm, Landweber, RichardsonLucy, RichardsonLucyTv, TikhonovMiller, VanCittert,
     damped_richardson_lucy_with, ictm, ictm_with, landweber, landweber_with, richardson_lucy,
     richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with, tikhonov_miller,
-    tikhonov_miller_with, van_cittert, van_cittert_with, Ictm, Landweber, RichardsonLucy,
-    RichardsonLucyTv, TikhonovMiller, VanCittert,
+    tikhonov_miller_with, van_cittert, van_cittert_with,
 };
 use deconvolution::optimization::{
-    bvls, bvls_with, cgls, cgls_with, cmle, cmle_with, fista, fista_with, gmle_with, hybr,
-    hybr_with, ista, ista_with, mrnsd, mrnsd_with, nnls, nnls_with, qmle, qmle_with, wpl, wpl_with,
-    Bvls, Cgls, Cmle, Fista, Gmle, Hybr, Ista, Mrnsd, Nnls, Qmle, SparseBasis, Wpl,
+    Bvls, Cgls, Cmle, Fista, Gmle, Hybr, Ista, Mrnsd, Nnls, Qmle, SparseBasis, Wpl, bvls,
+    bvls_with, cgls, cgls_with, cmle, cmle_with, fista, fista_with, gmle_with, hybr, hybr_with,
+    ista, ista_with, mrnsd, mrnsd_with, nnls, nnls_with, qmle, qmle_with, wpl, wpl_with,
 };
 use deconvolution::psf::basic::gaussian2d;
 use deconvolution::simulate::blur::blur;
@@ -65,14 +65,18 @@ fn richardson_lucy_output_is_nonnegative_and_finite() {
     let restored_array = gray_to_array(&restored.to_luma8());
     assert!(restored_array.iter().all(|value| *value >= 0.0));
     assert!(is_finite_2d(&restored_array));
-    assert!(report
-        .objective_history
-        .iter()
-        .all(|value| value.is_finite()));
-    assert!(report
-        .residual_history
-        .iter()
-        .all(|value| value.is_finite()));
+    assert!(
+        report
+            .objective_history
+            .iter()
+            .all(|value| value.is_finite())
+    );
+    assert!(
+        report
+            .residual_history
+            .iter()
+            .all(|value| value.is_finite())
+    );
 }
 
 #[test]
@@ -573,9 +577,11 @@ fn bvls_respects_custom_bounds_and_objective_stabilizes() {
     .unwrap();
 
     let restored_array = gray_to_array(&restored.to_luma8());
-    assert!(restored_array
-        .iter()
-        .all(|value| *value >= lower_bound / 255.0 && *value <= upper_bound / 255.0));
+    assert!(
+        restored_array
+            .iter()
+            .all(|value| *value >= lower_bound / 255.0 && *value <= upper_bound / 255.0)
+    );
     assert!(is_finite_2d(&restored_array));
     assert!(objective_stabilizes(report.objective_history.as_slice()));
 }

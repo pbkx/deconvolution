@@ -1,10 +1,11 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use deconvolution::nd;
 use deconvolution::optimization::Qmle;
 use deconvolution::psf::basic::gaussian3d;
 use deconvolution::simulate::blur::blur;
 use deconvolution::simulate::phantom::phantom_3d;
 use ndarray::{Array3, Axis};
+use std::hint::black_box;
 
 fn bench_volume(c: &mut Criterion) {
     let (volume, psf) = degraded_volume_fixture().expect("fixture");
