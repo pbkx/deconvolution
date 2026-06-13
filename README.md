@@ -17,21 +17,21 @@ preprocessing helpers, simulation fixtures, and ndarray APIs.
 
 ### Overview
 
-- **Image-first API**: Top-level functions operate on `image::DynamicImage`
-  and return image buffers suitable for saving or further processing.
-- **Known-PSF restoration**: Includes inverse filters, Wiener-family methods,
-  Richardson-Lucy variants, iterative least-squares methods, constrained
-  solvers, sparse/proximal methods, Krylov methods, and MLE-style solvers.
-- **PSF and OTF tooling**: Provides owned `Kernel2D`/`Kernel3D` and
-  `Transfer2D`/`Transfer3D` types, plus PSF generators, support utilities,
-  and `psf2otf`/`otf2psf` conversions.
-- **Blind deconvolution**: Includes blind Richardson-Lucy, blind maximum
-  likelihood, and parametric blind workflows with PSF constraints.
-- **Preprocessing and simulation**: Edge tapering, apodization, NSR
-  estimation, deterministic blur/noise helpers, and synthetic fixtures are
-  available for testing and examples.
-- **ndarray API**: Public `nd` modules expose 2D and 3D array workflows
-  for users who want to bypass `DynamicImage` conversion.
+- Image API: Top-level functions use `image::DynamicImage` and return images
+  ready to save.
+- Known PSF methods: Inverse filters, Wiener, Richardson-Lucy, constrained,
+  proximal, Krylov, and MLE-style restoration.
+- Blind methods: Blind Richardson-Lucy, blind maximum likelihood, and
+  parametric PSF estimation.
+- PSF and OTF types: `Kernel2D`, `Kernel3D`, `Transfer2D`, `Transfer3D`,
+  and `Blur2D`/`Blur3D`.
+- PSF tools: Gaussian, motion, defocus, microscopy models, support utilities,
+  and PSF/OTF conversion.
+- Preprocessing: Edge tapering, apodization, range normalization, and NSR
+  estimation.
+- Simulation: Deterministic blur, noise, and synthetic fixture generation.
+- ndarray support: 2D image arrays and 3D volume workflows.
+- Feature flags: `rayon` by default; optional `f16` support.
 
 ### Installation
 
@@ -44,15 +44,13 @@ cargo add deconvolution
 deconvolution = "0.1.0"
 ```
 
-The crate uses `image` as its image API. Applications that load or save image
-files directly should also depend on `image`:
+Image loading: Add `image` when your application opens or saves image files.
 
 ```bash
 cargo add image
 ```
 
-`rayon` is enabled by default and enables the rayon features on `ndarray` and `image`
-rayon feature flags. Disable default features for a serial build:
+Serial build: Disable default features to turn off `rayon`.
 
 ```toml
 [dependencies]
@@ -76,10 +74,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Image API, Channels, and Policies
+### Image API
 
-The known-PSF image API accepts `image::DynamicImage` values and supports these
-`DynamicImage` variants:
+Supported `DynamicImage` variants:
 
 - `ImageLuma8`
 - `ImageLumaA8`
@@ -92,7 +89,7 @@ The known-PSF image API accepts `image::DynamicImage` values and supports these
 - `ImageRgb32F`
 - `ImageRgba32F`
 
-Configuration enums are shared across algorithm families:
+Configuration enums:
 
 - **`Boundary`**: `Zero`, `Replicate`, `Reflect`, `Symmetric`, `Periodic`
 - **`Padding`**: `None`, `Same`, `Minimal`, `NextFastLen`, `Explicit2`,
@@ -101,11 +98,13 @@ Configuration enums are shared across algorithm families:
   `PremultipliedAlpha`
 - **`RangePolicy`**: `PreserveInput`, `Clamp01`, `ClampNegPos1`, `Unbounded`
 
-Use `ChannelMode::Independent` for per-channel color restoration,
-`ChannelMode::LumaOnly` when the blur should primarily affect luminance, and
-`RangePolicy::PreserveInput` when working in normal image sample ranges.
+Recommended defaults:
 
-### PSFs, OTFs, and Support Utilities
+- `ChannelMode::Independent`: Per-channel color restoration.
+- `ChannelMode::LumaOnly`: Luminance-focused restoration.
+- `RangePolicy::PreserveInput`: Normal image sample ranges.
+
+### PSF and OTF API
 
 Basic PSF generators:
 
@@ -152,11 +151,11 @@ Optical and microscopy models:
 - `otf::spectra::koehler_otf`
 - `otf::spectra::defocus_otf`
 
-### Known-PSF Deconvolution Method Families
+### Known PSF Methods
 
 #### Spectral and inverse filters
 
-Frequency-domain methods for fast known-kernel restoration.
+Frequency-domain restoration.
 
 - `naive_inverse_filter`
 - `inverse_filter`
@@ -174,11 +173,11 @@ Configuration types:
 - `Wiener`
 - `UnsupervisedWiener`
 
-Each method also exposes a `_with` variant for explicit configuration.
+Custom configs: Use `_with` variants.
 
 #### Richardson-Lucy and regularized RL
 
-Poisson-style multiplicative restoration with positivity-aware updates.
+Poisson-style multiplicative restoration.
 
 - `richardson_lucy`
 - `damped_richardson_lucy`
@@ -191,7 +190,7 @@ Configuration types:
 
 #### Iterative least-squares methods
 
-Residual-update solvers for deterministic restoration workflows.
+Residual-update restoration.
 
 - `landweber`
 - `van_cittert`
@@ -207,7 +206,7 @@ Configuration types:
 
 #### Constrained solvers
 
-Bound-aware restoration methods.
+Bound-aware restoration.
 
 - `nnls`
 - `bvls`
@@ -219,7 +218,7 @@ Configuration types:
 
 #### Sparse and proximal methods
 
-Proximal-gradient solvers with sparse-basis control.
+Proximal-gradient restoration.
 
 - `ista`
 - `fista`
@@ -232,7 +231,7 @@ Configuration and model types:
 
 #### Krylov and advanced iterative methods
 
-Scientific-imaging style iterative families.
+Scientific imaging solvers.
 
 - `mrnsd`
 - `cgls`
@@ -248,7 +247,7 @@ Configuration types:
 
 #### Maximum-likelihood family
 
-Microscopy-oriented MLE-style restoration methods.
+Microscopy-oriented MLE-style restoration.
 
 - `cmle`
 - `gmle`
@@ -262,9 +261,9 @@ Configuration types:
 
 ### Blind Deconvolution
 
-Blind workflows estimate both the restored image and the PSF.
-Image-facing blind workflows support Gray and GrayAlpha `DynamicImage` variants
-for u8 and u16 samples.
+Blind workflows: Estimate both the restored image and the PSF.
+
+Image support: Gray and GrayAlpha `DynamicImage` variants for u8 and u16.
 
 - `blind::richardson_lucy`
 - `blind::maximum_likelihood`
@@ -293,12 +292,13 @@ Parametric PSF families:
 - `Defocus { radius }`
 - `OrientedGaussian { sigma_major, sigma_minor, angle_deg }`
 
-### ndarray Workflows
+### ndarray API
 
-The public `nd` module exposes array-first workflows for users who already work
-in ndarray or need 3D volumes.
-Enable the optional `f16` feature to pass `half::f16` arrays into the 2D
-ndarray API while keeping computation in `f32`.
+Array workflows: Use `nd` for 2D arrays and 3D volumes.
+
+f16 support: Enable `f16` to pass `half::f16` arrays into the 2D ndarray API.
+
+Computation type: `f16` inputs still compute in `f32`.
 
 2D known-PSF methods in `nd::known_psf`:
 
@@ -325,7 +325,10 @@ Blind methods in `nd::blind`:
 
 ### Preprocessing
 
-Preprocessing utilities help reduce ringing and prepare numerical inputs.
+Ringing control: Use edge tapering or apodization before frequency-domain
+deconvolution.
+
+Numerical prep: Normalize ranges and estimate NSR before restoration.
 
 - `preprocess::apodize`
 - `preprocess::apodize::window_edges`
@@ -333,13 +336,11 @@ Preprocessing utilities help reduce ringing and prepare numerical inputs.
 - `preprocess::estimate_nsr`
 - `preprocess::normalize_range`
 
-Use `edgetaper` or apodization before frequency-domain deconvolution when
-strong edge discontinuities create ringing artifacts.
-
 ### Simulation and Fixtures
 
-Simulation utilities are deterministic and useful for tests, examples, and
-benchmark inputs.
+Deterministic: Same input and seed produce the same simulated output.
+
+Fixtures: Synthetic images and volumes for tests, examples, and benchmarks.
 
 Blur and degradation:
 
@@ -362,20 +363,17 @@ Synthetic fixtures:
 
 ### Optional rayon Integration
 
-`rayon` is enabled by default. The optional `f16` feature adds `half::f16`
-input/output support for the 2D ndarray API; computation remains in `f32`.
+Parallel processing: `rayon` is enabled by default.
+
+Serial builds: Disable default features.
+
+Feature flags:
 
 ```toml
 [features]
 default = ["rayon"]
 rayon = ["dep:rayon", "ndarray/rayon", "image/rayon"]
 f16 = ["dep:half"]
-```
-
-Disable default features for serial builds:
-
-```bash
-cargo test --no-default-features
 ```
 
 ### Example Programs
@@ -398,7 +396,7 @@ cargo run --example microscopy_volume
 
 ### Benchmarks and Development
 
-Bench families (`criterion`):
+Benchmarks: Criterion benchmark families.
 
 - `spectral`
 - `rl`
@@ -413,7 +411,7 @@ cargo bench --bench blind
 cargo bench --bench volume
 ```
 
-Development checks:
+Checks:
 
 ```bash
 cargo fmt --all -- --check
@@ -425,18 +423,16 @@ cargo doc --workspace --no-deps --all-features
 
 ### Limitations and Scope
 
-- Known-PSF image-facing algorithms support u8/u16 Gray, GrayAlpha, Rgb, and Rgba
-  `DynamicImage` variants, plus 32-bit float Rgb and Rgba images.
-- Blind image-facing algorithms support u8/u16 Gray and GrayAlpha
-  `DynamicImage` variants.
-- Deconvolution quality depends heavily on the PSF, boundary assumptions, and
-  regularization strength.
-- Aggressive inverse filtering can amplify noise and ringing; prefer Wiener,
-  damping, TV regularization, edge tapering, or constrained solvers for noisy
-  inputs.
-- Blind deconvolution is sensitive to initialization and PSF constraints.
+- Known PSF images: u8/u16 Gray, GrayAlpha, Rgb, Rgba; 32-bit float Rgb and
+  Rgba.
+- Blind images: u8/u16 Gray and GrayAlpha.
+- Quality: Depends heavily on the PSF, boundary assumptions, and regularization
+  strength.
+- Inverse filtering: Can amplify noise and ringing.
+- Noisy inputs: Prefer Wiener, damping, TV regularization, edge tapering, or
+  constrained solvers.
+- Blind deconvolution: Sensitive to initialization and PSF constraints.
 
 ## License
 
 deconvolution is licensed under the [MIT License](LICENSE), copyright (c) 2026 pbkx.
-

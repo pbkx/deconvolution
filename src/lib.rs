@@ -10,20 +10,21 @@
 //!
 //! ## Overview
 //!
-//! - **Image API**: Top-level functions operate on [`image::DynamicImage`] and
-//!   return image buffers suitable for saving or further processing.
-//! - **Known-PSF restoration**: Inverse filters, Wiener-family methods,
-//!   Richardson-Lucy variants, least-squares solvers, constrained solvers,
-//!   proximal methods, Krylov methods, and MLE-style solvers.
-//! - **PSF/OTF utilities**: Owned [`Kernel2D`]/[`Kernel3D`] and
-//!   [`Transfer2D`]/[`Transfer3D`] types, PSF generators, support utilities,
-//!   and PSF/OTF conversions.
-//! - **Blind deconvolution**: Blind Richardson-Lucy, blind maximum likelihood,
-//!   and parametric blind workflows with PSF constraints.
-//! - **Preprocessing and simulation**: Edge tapering, apodization, NSR
-//!   estimation, deterministic blur/noise helpers, and synthetic fixtures.
-//! - **ndarray workflows**: Public [`nd`] modules expose 2D image arrays and
-//!   3D volume workflows for users who want to bypass `DynamicImage`.
+//! - Image API: Top-level functions use [`image::DynamicImage`] and return
+//!   images ready to save.
+//! - Known PSF methods: Inverse filters, Wiener, Richardson-Lucy, constrained,
+//!   proximal, Krylov, and MLE-style restoration.
+//! - Blind methods: Blind Richardson-Lucy, blind maximum likelihood, and
+//!   parametric PSF estimation.
+//! - PSF and OTF types: [`Kernel2D`], [`Kernel3D`], [`Transfer2D`],
+//!   [`Transfer3D`], and [`psf::Blur2D`]/[`psf::Blur3D`].
+//! - PSF tools: Gaussian, motion, defocus, microscopy models, support
+//!   utilities, and PSF/OTF conversion.
+//! - Preprocessing: Edge tapering, apodization, range normalization, and NSR
+//!   estimation.
+//! - Simulation: Deterministic blur, noise, and synthetic fixture generation.
+//! - ndarray support: 2D image arrays and 3D volume workflows.
+//! - Feature flags: `rayon` by default; optional `f16` support.
 //!
 //! ## Quick Start
 //!
@@ -42,10 +43,9 @@
 //! }
 //! ```
 //!
-//! ## Image API and Configuration
+//! ## Image API
 //!
-//! Known-PSF image-facing algorithms accept [`image::DynamicImage`] values and
-//! support these variants:
+//! Supported [`image::DynamicImage`] variants:
 //!
 //! - `ImageLuma8`
 //! - `ImageLumaA8`
@@ -58,7 +58,7 @@
 //! - `ImageRgb32F`
 //! - `ImageRgba32F`
 //!
-//! Shared configuration enums:
+//! Configuration enums:
 //!
 //! - [`Boundary`]: `Zero`, `Replicate`, `Reflect`, `Symmetric`, `Periodic`
 //! - [`Padding`]: `None`, `Same`, `Minimal`, `NextFastLen`, `Explicit2`,
@@ -66,6 +66,12 @@
 //! - [`ChannelMode`]: `Independent`, `LumaOnly`, `IgnoreAlpha`,
 //!   `PremultipliedAlpha`
 //! - [`RangePolicy`]: `PreserveInput`, `Clamp01`, `ClampNegPos1`, `Unbounded`
+//!
+//! Recommended defaults:
+//!
+//! - [`ChannelMode::Independent`]: Per-channel color restoration.
+//! - [`ChannelMode::LumaOnly`]: Luminance-focused restoration.
+//! - [`RangePolicy::PreserveInput`]: Normal image sample ranges.
 //!
 //! ## PSF and OTF API
 //!
@@ -127,6 +133,7 @@
 //! ## Algorithm Families
 //!
 //! Spectral and inverse filters:
+//! Frequency-domain restoration.
 //!
 //! - [`spectral::naive_inverse_filter`]
 //! - [`spectral::inverse_filter`]
@@ -137,6 +144,7 @@
 //! - [`spectral::unsupervised_wiener`]
 //!
 //! Richardson-Lucy and iterative restoration:
+//! Poisson-style and residual-update restoration.
 //!
 //! - [`iterative::richardson_lucy`]
 //! - [`iterative::damped_richardson_lucy`]
@@ -147,6 +155,8 @@
 //! - [`iterative::ictm`]
 //!
 //! Constrained, proximal, Krylov, and MLE-style solvers:
+//! Bound-aware, sparse, scientific-imaging, and microscopy-oriented
+//! restoration.
 //!
 //! - [`optimization::nnls`], [`optimization::bvls`]
 //! - [`optimization::ista`], [`optimization::fista`]
@@ -155,17 +165,17 @@
 //! - [`optimization::cmle`], [`optimization::gmle`],
 //!   [`optimization::qmle`]
 //!
-//! Each configurable algorithm family exposes a `_with` variant and a
-//! configuration type, such as [`Wiener`], [`RichardsonLucy`],
-//! [`spectral::InverseFilter`], [`iterative::Landweber`],
-//! [`optimization::Fista`], or [`optimization::Qmle`].
+//! Custom configs: Use `_with` variants and configuration types such as
+//! [`Wiener`], [`RichardsonLucy`], [`spectral::InverseFilter`],
+//! [`iterative::Landweber`], [`optimization::Fista`], or
+//! [`optimization::Qmle`].
 //!
 //! ## Blind Deconvolution
 //!
-//! Blind workflows estimate both the restored image and the point-spread
-//! function.
-//! Image-facing blind workflows support Gray and GrayAlpha `DynamicImage`
-//! variants for u8 and u16 samples.
+//! Blind workflows: Estimate both the restored image and the PSF.
+//!
+//! Image support: Gray and GrayAlpha [`image::DynamicImage`] variants for u8
+//! and u16.
 //!
 //! - [`blind::richardson_lucy`]
 //! - [`blind::maximum_likelihood`]
@@ -190,10 +200,12 @@
 //!
 //! ## ndarray API
 //!
-//! The public [`nd`] module exposes array-first workflows for users who already
-//! work in ndarray or need 3D volumes.
-//! Enable the optional `f16` feature to pass `half::f16` arrays into the 2D
-//! ndarray API while keeping computation in `f32`.
+//! Array workflows: Use [`nd`] for 2D arrays and 3D volumes.
+//!
+//! f16 support: Enable `f16` to pass `half::f16` arrays into the 2D ndarray
+//! API.
+//!
+//! Computation type: `f16` inputs still compute in `f32`.
 //!
 //! 2D known-PSF methods in [`nd::known_psf`]:
 //!
@@ -223,7 +235,10 @@
 //!
 //! ## Preprocessing and Simulation
 //!
-//! Preprocessing utilities:
+//! Ringing control: Use edge tapering or apodization before frequency-domain
+//! deconvolution.
+//!
+//! Numerical prep: Normalize ranges and estimate NSR before restoration.
 //!
 //! - [`preprocess::apodize()`]
 //! - [`preprocess::apodize::window_edges`]
@@ -231,7 +246,10 @@
 //! - [`preprocess::estimate_nsr`]
 //! - [`preprocess::normalize_range`]
 //!
-//! Simulation utilities:
+//! Deterministic simulation: Same input and seed produce the same simulated
+//! output.
+//!
+//! Fixtures: Synthetic images and volumes for tests, examples, and benchmarks.
 //!
 //! - [`simulate::blur::blur`]
 //! - [`simulate::blur::blur_otf`]
@@ -246,22 +264,21 @@
 //!
 //! ## Reports, Errors, and Prelude
 //!
-//! Crate-level result and error types:
+//! Error handling:
 //!
 //! - [`Error`]
 //! - [`Result`]
 //!
-//! Solver reporting:
+//! Solver reports:
 //!
 //! - [`SolveReport`]
 //! - [`StopReason`]
 //!
-//! Convenience imports:
+//! Prelude:
 //!
 //! - [`prelude`]
 //!
-//! For complete workflows and runnable examples, see `examples/` and the
-//! repository README.
+//! Runnable examples: See `examples/` and the repository README.
 
 mod algorithms;
 mod core;
