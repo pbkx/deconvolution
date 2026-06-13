@@ -4,8 +4,8 @@ use ndarray::Array2;
 use crate::psf::{Kernel2D, PsfConstraint};
 use crate::{Error, Result};
 
-use super::rl::{richardson_lucy_array2_with, richardson_lucy_with};
-use super::{BlindOutput, BlindRichardsonLucy};
+use super::rl::{restore_poisson_em_array2, restore_poisson_em_dynamic, BlindPoissonEm};
+use super::BlindOutput;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlindMaximumLikelihood {
@@ -86,15 +86,8 @@ pub fn maximum_likelihood_with(
     config: &BlindMaximumLikelihood,
 ) -> Result<BlindOutput<DynamicImage>> {
     validate_config(config)?;
-
-    let rl_config = BlindRichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .psf_constraints(config.psf_constraints.clone())
-        .collect_history(config.collect_history);
-
-    richardson_lucy_with(image, initial_psf, &rl_config)
+    let poisson = blind_poisson_em(config);
+    restore_poisson_em_dynamic(image, initial_psf, &poisson)
 }
 
 pub(crate) fn maximum_likelihood_array2_with(
@@ -103,15 +96,18 @@ pub(crate) fn maximum_likelihood_array2_with(
     config: &BlindMaximumLikelihood,
 ) -> Result<BlindOutput<Array2<f32>>> {
     validate_config(config)?;
+    let poisson = blind_poisson_em(config);
+    restore_poisson_em_array2(image, initial_psf, &poisson)
+}
 
-    let rl_config = BlindRichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .psf_constraints(config.psf_constraints.clone())
-        .collect_history(config.collect_history);
-
-    richardson_lucy_array2_with(image, initial_psf, &rl_config)
+fn blind_poisson_em(config: &BlindMaximumLikelihood) -> BlindPoissonEm {
+    BlindPoissonEm {
+        iterations: config.iterations,
+        relative_update_tolerance: config.relative_update_tolerance,
+        filter_epsilon: config.filter_epsilon,
+        psf_constraints: config.psf_constraints.clone(),
+        collect_history: config.collect_history,
+    }
 }
 
 fn validate_config(config: &BlindMaximumLikelihood) -> Result<()> {

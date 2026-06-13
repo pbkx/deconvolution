@@ -1,10 +1,7 @@
 use image::DynamicImage;
 use ndarray::Array2;
 
-use super::rl::{
-    richardson_lucy_array2_with, richardson_lucy_tv_array2_with, richardson_lucy_tv_with,
-    richardson_lucy_with, RichardsonLucy, RichardsonLucyTv,
-};
+use super::rl::{run_poisson_em, run_poisson_em_array2, PoissonEm, PoissonRegularization};
 use crate::{ChannelMode, Error, Kernel2D, RangePolicy, Result, SolveReport};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -250,17 +247,8 @@ pub fn cmle_with(
     config: &Cmle,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate_cmle(config)?;
-    let rl = RichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(acuity_to_damping(config.acuity)?)
-        .readout_noise(snr_to_readout_noise(config.snr)?)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history);
-    richardson_lucy_with(image, psf, &rl)
+    let poisson = cmle_poisson_em(config)?;
+    run_poisson_em(image, psf, &poisson, PoissonRegularization::None)
 }
 
 pub(crate) fn cmle_array2_with(
@@ -269,17 +257,8 @@ pub(crate) fn cmle_array2_with(
     config: &Cmle,
 ) -> Result<(Array2<f32>, SolveReport)> {
     validate_cmle(config)?;
-    let rl = RichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(acuity_to_damping(config.acuity)?)
-        .readout_noise(snr_to_readout_noise(config.snr)?)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history);
-    richardson_lucy_array2_with(image, psf, &rl)
+    let poisson = cmle_poisson_em(config)?;
+    run_poisson_em_array2(image, psf, &poisson, PoissonRegularization::None)
 }
 
 pub fn gmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
@@ -292,25 +271,8 @@ pub fn gmle_with(
     config: &Gmle,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate_gmle(config)?;
-    let snr_noise = snr_to_readout_noise(config.snr)?;
-    let noise_damping = (2.0 / config.snr.max(1.0)).sqrt().clamp(0.0, 1.0);
-    let damping = acuity_to_damping(config.acuity)?
-        .unwrap_or(0.0)
-        .max(noise_damping);
-    let tv_weight = ((config.roughness / config.snr.max(1.0)) * 0.8).clamp(0.0, 0.15);
-    let rl_tv = RichardsonLucyTv::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(Some(damping))
-        .readout_noise(snr_noise)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history)
-        .tv_weight(tv_weight)
-        .tv_epsilon(config.tv_epsilon);
-    richardson_lucy_tv_with(image, psf, &rl_tv)
+    let (poisson, regularization) = gmle_poisson_em(config)?;
+    run_poisson_em(image, psf, &poisson, regularization)
 }
 
 pub(crate) fn gmle_array2_with(
@@ -319,25 +281,8 @@ pub(crate) fn gmle_array2_with(
     config: &Gmle,
 ) -> Result<(Array2<f32>, SolveReport)> {
     validate_gmle(config)?;
-    let snr_noise = snr_to_readout_noise(config.snr)?;
-    let noise_damping = (2.0 / config.snr.max(1.0)).sqrt().clamp(0.0, 1.0);
-    let damping = acuity_to_damping(config.acuity)?
-        .unwrap_or(0.0)
-        .max(noise_damping);
-    let tv_weight = ((config.roughness / config.snr.max(1.0)) * 0.8).clamp(0.0, 0.15);
-    let rl_tv = RichardsonLucyTv::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(Some(damping))
-        .readout_noise(snr_noise)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history)
-        .tv_weight(tv_weight)
-        .tv_epsilon(config.tv_epsilon);
-    richardson_lucy_tv_array2_with(image, psf, &rl_tv)
+    let (poisson, regularization) = gmle_poisson_em(config)?;
+    run_poisson_em_array2(image, psf, &poisson, regularization)
 }
 
 pub fn qmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
@@ -350,17 +295,8 @@ pub fn qmle_with(
     config: &Qmle,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate_qmle(config)?;
-    let rl = RichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(acuity_to_damping(config.acuity)?)
-        .readout_noise(snr_to_readout_noise(config.snr)? * 0.5)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history);
-    richardson_lucy_with(image, psf, &rl)
+    let poisson = qmle_poisson_em(config)?;
+    run_poisson_em(image, psf, &poisson, PoissonRegularization::None)
 }
 
 pub(crate) fn qmle_array2_with(
@@ -369,17 +305,65 @@ pub(crate) fn qmle_array2_with(
     config: &Qmle,
 ) -> Result<(Array2<f32>, SolveReport)> {
     validate_qmle(config)?;
-    let rl = RichardsonLucy::new()
-        .iterations(config.iterations)
-        .relative_update_tolerance(config.relative_update_tolerance)
-        .filter_epsilon(config.filter_epsilon)
-        .damping(acuity_to_damping(config.acuity)?)
-        .readout_noise(snr_to_readout_noise(config.snr)? * 0.5)
-        .positivity(true)
-        .channel_mode(config.channel_mode)
-        .range_policy(config.range_policy)
-        .collect_history(config.collect_history);
-    richardson_lucy_array2_with(image, psf, &rl)
+    let poisson = qmle_poisson_em(config)?;
+    run_poisson_em_array2(image, psf, &poisson, PoissonRegularization::None)
+}
+
+fn cmle_poisson_em(config: &Cmle) -> Result<PoissonEm> {
+    Ok(PoissonEm {
+        iterations: config.iterations,
+        relative_update_tolerance: config.relative_update_tolerance,
+        filter_epsilon: config.filter_epsilon,
+        damping: acuity_to_damping(config.acuity)?,
+        weights: None,
+        readout_noise: snr_to_readout_noise(config.snr)?,
+        positivity: true,
+        channel_mode: config.channel_mode,
+        range_policy: config.range_policy,
+        collect_history: config.collect_history,
+    })
+}
+
+fn gmle_poisson_em(config: &Gmle) -> Result<(PoissonEm, PoissonRegularization)> {
+    let snr_noise = snr_to_readout_noise(config.snr)?;
+    let noise_damping = (2.0 / config.snr.max(1.0)).sqrt().clamp(0.0, 1.0);
+    let damping = acuity_to_damping(config.acuity)?
+        .unwrap_or(0.0)
+        .max(noise_damping);
+    let tv_weight = ((config.roughness / config.snr.max(1.0)) * 0.8).clamp(0.0, 0.15);
+    Ok((
+        PoissonEm {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            filter_epsilon: config.filter_epsilon,
+            damping: Some(damping),
+            weights: None,
+            readout_noise: snr_noise,
+            positivity: true,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        },
+        PoissonRegularization::Tv {
+            weight: tv_weight,
+            epsilon: config.tv_epsilon,
+        },
+    ))
+}
+
+fn qmle_poisson_em(config: &Qmle) -> Result<PoissonEm> {
+    Ok(PoissonEm {
+        iterations: config.iterations,
+        relative_update_tolerance: config.relative_update_tolerance,
+        filter_epsilon: config.filter_epsilon,
+        damping: acuity_to_damping(config.acuity)?,
+        weights: None,
+        readout_noise: snr_to_readout_noise(config.snr)? * 0.5,
+        positivity: true,
+        channel_mode: config.channel_mode,
+        range_policy: config.range_policy,
+        collect_history: config.collect_history,
+    })
 }
 
 fn snr_to_readout_noise(snr: f32) -> Result<f32> {

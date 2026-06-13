@@ -79,6 +79,27 @@ impl BlindRichardsonLucy {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BlindPoissonEm {
+    pub(crate) iterations: usize,
+    pub(crate) relative_update_tolerance: Option<f32>,
+    pub(crate) filter_epsilon: f32,
+    pub(crate) psf_constraints: Vec<PsfConstraint>,
+    pub(crate) collect_history: bool,
+}
+
+impl BlindPoissonEm {
+    fn from_richardson_lucy(config: &BlindRichardsonLucy) -> Self {
+        Self {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            filter_epsilon: config.filter_epsilon,
+            psf_constraints: config.psf_constraints.clone(),
+            collect_history: config.collect_history,
+        }
+    }
+}
+
 pub fn richardson_lucy(
     image: &DynamicImage,
     initial_psf: &Kernel2D,
@@ -91,8 +112,28 @@ pub fn richardson_lucy_with(
     initial_psf: &Kernel2D,
     config: &BlindRichardsonLucy,
 ) -> Result<BlindOutput<DynamicImage>> {
+    validate_config(config)?;
+    let poisson = BlindPoissonEm::from_richardson_lucy(config);
+    restore_poisson_em_dynamic(image, initial_psf, &poisson)
+}
+
+pub(crate) fn richardson_lucy_array2_with(
+    image: &Array2<f32>,
+    initial_psf: &Kernel2D,
+    config: &BlindRichardsonLucy,
+) -> Result<BlindOutput<Array2<f32>>> {
+    validate_config(config)?;
+    let poisson = BlindPoissonEm::from_richardson_lucy(config);
+    restore_poisson_em_array2(image, initial_psf, &poisson)
+}
+
+pub(crate) fn restore_poisson_em_dynamic(
+    image: &DynamicImage,
+    initial_psf: &Kernel2D,
+    config: &BlindPoissonEm,
+) -> Result<BlindOutput<DynamicImage>> {
     let observed = dynamic_luma_to_array2(image)?;
-    let output = restore_array2(&observed, initial_psf, config)?;
+    let output = restore_poisson_em_array2(&observed, initial_psf, config)?;
     let restored = rebuild_luma_dynamic_like(image, &output.image)?;
     Ok(BlindOutput {
         image: restored,
@@ -101,21 +142,13 @@ pub fn richardson_lucy_with(
     })
 }
 
-pub(crate) fn richardson_lucy_array2_with(
+pub(crate) fn restore_poisson_em_array2(
     image: &Array2<f32>,
     initial_psf: &Kernel2D,
-    config: &BlindRichardsonLucy,
-) -> Result<BlindOutput<Array2<f32>>> {
-    restore_array2(image, initial_psf, config)
-}
-
-fn restore_array2(
-    image: &Array2<f32>,
-    initial_psf: &Kernel2D,
-    config: &BlindRichardsonLucy,
+    config: &BlindPoissonEm,
 ) -> Result<BlindOutput<Array2<f32>>> {
     validate(initial_psf)?;
-    validate_config(config)?;
+    validate_blind_poisson_em_config(config)?;
 
     let mut observed = image.as_standard_layout().to_owned();
     observed = project_nonnegative_2d(&observed)?;
@@ -390,7 +423,7 @@ fn wrap_index(value: i64, size: usize) -> Result<usize> {
     usize::try_from(wrapped).map_err(|_| Error::DimensionMismatch)
 }
 
-fn validate_config(config: &BlindRichardsonLucy) -> Result<()> {
+pub(crate) fn validate_blind_poisson_em_config(config: &BlindPoissonEm) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
@@ -406,4 +439,8 @@ fn validate_config(config: &BlindRichardsonLucy) -> Result<()> {
         return Err(Error::InvalidParameter);
     }
     Ok(())
+}
+
+fn validate_config(config: &BlindRichardsonLucy) -> Result<()> {
+    validate_blind_poisson_em_config(&BlindPoissonEm::from_richardson_lucy(config))
 }

@@ -194,9 +194,40 @@ impl RichardsonLucyTv {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Regularization {
+pub(crate) enum PoissonRegularization {
     None,
     Tv { weight: f32, epsilon: f32 },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PoissonEm {
+    pub(crate) iterations: usize,
+    pub(crate) relative_update_tolerance: Option<f32>,
+    pub(crate) filter_epsilon: f32,
+    pub(crate) damping: Option<f32>,
+    pub(crate) weights: Option<Array2<f32>>,
+    pub(crate) readout_noise: f32,
+    pub(crate) positivity: bool,
+    pub(crate) channel_mode: ChannelMode,
+    pub(crate) range_policy: RangePolicy,
+    pub(crate) collect_history: bool,
+}
+
+impl PoissonEm {
+    fn from_richardson_lucy(config: &RichardsonLucy) -> Self {
+        Self {
+            iterations: config.iterations,
+            relative_update_tolerance: config.relative_update_tolerance,
+            filter_epsilon: config.filter_epsilon,
+            damping: config.damping,
+            weights: config.weights.clone(),
+            readout_noise: config.readout_noise,
+            positivity: config.positivity,
+            channel_mode: config.channel_mode,
+            range_policy: config.range_policy,
+            collect_history: config.collect_history,
+        }
+    }
 }
 
 pub fn richardson_lucy(
@@ -211,7 +242,7 @@ pub fn richardson_lucy_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(DynamicImage, SolveReport)> {
-    run_richardson_lucy(image, psf, config, false, Regularization::None)
+    run_richardson_lucy(image, psf, config, false, PoissonRegularization::None)
 }
 
 pub(crate) fn richardson_lucy_array2_with(
@@ -219,7 +250,7 @@ pub(crate) fn richardson_lucy_array2_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(Array2<f32>, SolveReport)> {
-    run_richardson_lucy_array2(image, psf, config, false, Regularization::None)
+    run_richardson_lucy_array2(image, psf, config, false, PoissonRegularization::None)
 }
 
 pub fn damped_richardson_lucy(
@@ -234,7 +265,7 @@ pub fn damped_richardson_lucy_with(
     psf: &Kernel2D,
     config: &RichardsonLucy,
 ) -> Result<(DynamicImage, SolveReport)> {
-    run_richardson_lucy(image, psf, config, true, Regularization::None)
+    run_richardson_lucy(image, psf, config, true, PoissonRegularization::None)
 }
 
 pub fn richardson_lucy_tv(
@@ -250,7 +281,7 @@ pub fn richardson_lucy_tv_with(
     config: &RichardsonLucyTv,
 ) -> Result<(DynamicImage, SolveReport)> {
     validate_tv_config(config)?;
-    let regularization = Regularization::Tv {
+    let regularization = PoissonRegularization::Tv {
         weight: config.tv_weight,
         epsilon: config.tv_epsilon,
     };
@@ -263,7 +294,7 @@ pub(crate) fn richardson_lucy_tv_array2_with(
     config: &RichardsonLucyTv,
 ) -> Result<(Array2<f32>, SolveReport)> {
     validate_tv_config(config)?;
-    let regularization = Regularization::Tv {
+    let regularization = PoissonRegularization::Tv {
         weight: config.tv_weight,
         epsilon: config.tv_epsilon,
     };
@@ -275,13 +306,23 @@ fn run_richardson_lucy(
     psf: &Kernel2D,
     config: &RichardsonLucy,
     force_damping: bool,
-    regularization: Regularization,
+    regularization: PoissonRegularization,
 ) -> Result<(DynamicImage, SolveReport)> {
-    validate(psf)?;
     let effective_config = resolve_effective_config(config, force_damping);
     validate_config(&effective_config)?;
-    validate_regularization(regularization)?;
+    let poisson_config = PoissonEm::from_richardson_lucy(&effective_config);
+    run_poisson_em(image, psf, &poisson_config, regularization)
+}
 
+pub(crate) fn run_poisson_em(
+    image: &DynamicImage,
+    psf: &Kernel2D,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
+) -> Result<(DynamicImage, SolveReport)> {
+    validate(psf)?;
+    validate_poisson_em_config(config)?;
+    validate_regularization(regularization)?;
     let normalized_psf = psf.normalized()?;
     let op = Convolution2D::new(&normalized_psf)?;
     let planar = PlanarImage::from_dynamic(image)?;
@@ -297,7 +338,7 @@ fn run_richardson_lucy(
         planar.alpha(),
         planar.alpha_denominator(),
         &op,
-        &effective_config,
+        config,
         regularization,
     )?;
     let restored = rebuild_dynamic_like(image, &restored_color)?;
@@ -309,13 +350,23 @@ fn run_richardson_lucy_array2(
     psf: &Kernel2D,
     config: &RichardsonLucy,
     force_damping: bool,
-    regularization: Regularization,
+    regularization: PoissonRegularization,
 ) -> Result<(Array2<f32>, SolveReport)> {
-    validate(psf)?;
     let effective_config = resolve_effective_config(config, force_damping);
     validate_config(&effective_config)?;
-    validate_regularization(regularization)?;
+    let poisson_config = PoissonEm::from_richardson_lucy(&effective_config);
+    run_poisson_em_array2(image, psf, &poisson_config, regularization)
+}
 
+pub(crate) fn run_poisson_em_array2(
+    image: &Array2<f32>,
+    psf: &Kernel2D,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
+) -> Result<(Array2<f32>, SolveReport)> {
+    validate(psf)?;
+    validate_poisson_em_config(config)?;
+    validate_regularization(regularization)?;
     let normalized_psf = psf.normalized()?;
     let op = Convolution2D::new(&normalized_psf)?;
     let planar = PlanarImage::from_array2(image)?;
@@ -331,7 +382,7 @@ fn run_richardson_lucy_array2(
         planar.alpha(),
         planar.alpha_denominator(),
         &op,
-        &effective_config,
+        config,
         regularization,
     )?;
     let restored = PlanarImage::to_array2_gray(&restored_color)?;
@@ -343,8 +394,8 @@ fn restore_color(
     alpha: Option<&Array2<f32>>,
     alpha_denominator: f32,
     operator: &Convolution2D,
-    config: &RichardsonLucy,
-    regularization: Regularization,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let shape = color.shape();
     if shape.len() != 3 {
@@ -376,8 +427,8 @@ fn restore_color(
 fn restore_independent(
     color: &Array3<f32>,
     operator: &Convolution2D,
-    config: &RichardsonLucy,
-    regularization: Regularization,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
@@ -403,8 +454,8 @@ fn restore_independent(
 fn restore_luma_only(
     color: &Array3<f32>,
     operator: &Convolution2D,
-    config: &RichardsonLucy,
-    regularization: Regularization,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let channels = color.shape()[0];
     let height = color.shape()[1];
@@ -452,8 +503,8 @@ fn restore_premultiplied(
     alpha: Option<&Array2<f32>>,
     alpha_denominator: f32,
     operator: &Convolution2D,
-    config: &RichardsonLucy,
-    regularization: Regularization,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
 ) -> Result<(Array3<f32>, SolveReport)> {
     let Some(alpha) = alpha else {
         return restore_independent(color, operator, config, regularization);
@@ -507,8 +558,8 @@ fn restore_premultiplied(
 fn restore_channel(
     input: &Array2<f32>,
     operator: &Convolution2D,
-    config: &RichardsonLucy,
-    regularization: Regularization,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
 ) -> Result<(Array2<f32>, SolveReport)> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
@@ -649,12 +700,12 @@ fn apply_damping(correction: &Array2<f32>, damping: Option<f32>) -> Result<Array
 
 fn apply_regularization(
     input: &Array2<f32>,
-    regularization: Regularization,
+    regularization: PoissonRegularization,
     positivity: bool,
 ) -> Result<Array2<f32>> {
     match regularization {
-        Regularization::None => Ok(input.to_owned()),
-        Regularization::Tv { weight, epsilon } => {
+        PoissonRegularization::None => Ok(input.to_owned()),
+        PoissonRegularization::Tv { weight, epsilon } => {
             let mut output = tv_regularize_step_2d(input, weight, epsilon)?;
             if positivity {
                 output = project_nonnegative_2d(&output)?;
@@ -859,10 +910,10 @@ fn validate_tv_config(config: &RichardsonLucyTv) -> Result<()> {
     Ok(())
 }
 
-fn validate_regularization(regularization: Regularization) -> Result<()> {
+fn validate_regularization(regularization: PoissonRegularization) -> Result<()> {
     match regularization {
-        Regularization::None => Ok(()),
-        Regularization::Tv { weight, epsilon } => {
+        PoissonRegularization::None => Ok(()),
+        PoissonRegularization::Tv { weight, epsilon } => {
             if !weight.is_finite() || weight < 0.0 {
                 return Err(Error::InvalidParameter);
             }
@@ -874,7 +925,7 @@ fn validate_regularization(regularization: Regularization) -> Result<()> {
     }
 }
 
-fn validate_config(config: &RichardsonLucy) -> Result<()> {
+pub(crate) fn validate_poisson_em_config(config: &PoissonEm) -> Result<()> {
     if config.iterations == 0 {
         return Err(Error::InvalidParameter);
     }
@@ -903,4 +954,8 @@ fn validate_config(config: &RichardsonLucy) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn validate_config(config: &RichardsonLucy) -> Result<()> {
+    validate_poisson_em_config(&PoissonEm::from_richardson_lucy(config))
 }
