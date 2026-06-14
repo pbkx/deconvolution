@@ -249,6 +249,8 @@
 //!
 //! - [`simulate::blur::blur`]
 //! - [`simulate::blur::blur_otf`]
+//! - [`simulate::blur::blur_3d`]
+//! - [`simulate::blur::blur_otf_3d`]
 //! - [`simulate::blur::degrade`]
 //! - [`simulate::noise::add_gaussian_noise`]
 //! - [`simulate::noise::add_poisson_noise`]

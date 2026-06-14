@@ -27,15 +27,18 @@ pub use krylov::{
 };
 pub(crate) use krylov::{cgls_array2_with, hybr_array2_with, mrnsd_array2_with, wpl_array2_with};
 pub use mle::{Cmle, Gmle, Qmle, cmle, cmle_with, gmle, gmle_with, qmle, qmle_with};
-pub(crate) use mle::{cmle_array2_with, gmle_array2_with, qmle_array2_with};
+pub(crate) use mle::{cmle_array3_with, gmle_array3_with, qmle_array3_with};
 pub use proximal::{Fista, Ista, SparseBasis, fista, fista_with, ista, ista_with};
 pub(crate) use proximal::{fista_array2_with, ista_array2_with};
 pub use rl::{
     RichardsonLucy, RichardsonLucyTv, damped_richardson_lucy, damped_richardson_lucy_with,
     richardson_lucy, richardson_lucy_tv, richardson_lucy_tv_with, richardson_lucy_with,
 };
-pub(crate) use rl::{richardson_lucy_array2_with, richardson_lucy_tv_array2_with};
+pub(crate) use rl::{
+    richardson_lucy_array2_with, richardson_lucy_array3_with, richardson_lucy_tv_array2_with,
+    richardson_lucy_tv_array3_with,
+};
 pub use wiener::{
     UnsupervisedWiener, Wiener, unsupervised_wiener, unsupervised_wiener_with, wiener, wiener_with,
 };
-pub(crate) use wiener::{unsupervised_wiener_array2_with, wiener_array2_with};
+pub(crate) use wiener::{unsupervised_wiener_array2_with, wiener_array2_with, wiener_array3_with};

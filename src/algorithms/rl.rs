@@ -1,16 +1,20 @@
 use image::DynamicImage;
 use ndarray::{Array2, Array3, Axis};
+use num_complex::Complex32;
 
-use super::proximal::tv_regularize_step_2d;
+use super::proximal::{tv_regularize_step_2d, tv_regularize_step_3d};
 use crate::core::conv::Convolution2D;
 use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
 use crate::core::diagnostics::Diagnostics;
+use crate::core::fft::{fft3_forward_real, fft3_inverse_complex};
 use crate::core::operator::LinearOperator2D;
-use crate::core::projections::project_nonnegative_2d;
+use crate::core::plan_cache::PlanCache;
+use crate::core::projections::{project_nonnegative_2d, project_nonnegative_3d};
 use crate::core::stopping::{StopCriteria, check_stop};
-use crate::preprocess::normalize_range;
-use crate::psf::Kernel2D;
-use crate::psf::support::validate;
+use crate::otf::convert::psf2otf_3d;
+use crate::preprocess::{normalize_range, normalize_range_3d};
+use crate::psf::support::{validate, validate_3d};
+use crate::psf::{Kernel2D, Kernel3D};
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -253,6 +257,14 @@ pub(crate) fn richardson_lucy_array2_with(
     run_richardson_lucy_array2(image, psf, config, false, PoissonRegularization::None)
 }
 
+pub(crate) fn richardson_lucy_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
+    config: &RichardsonLucy,
+) -> Result<(Array3<f32>, SolveReport)> {
+    run_richardson_lucy_array3(volume, psf, config, false, PoissonRegularization::None)
+}
+
 pub fn damped_richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -299,6 +311,19 @@ pub(crate) fn richardson_lucy_tv_array2_with(
         epsilon: config.tv_epsilon,
     };
     run_richardson_lucy_array2(image, psf, &config.base, false, regularization)
+}
+
+pub(crate) fn richardson_lucy_tv_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
+    config: &RichardsonLucyTv,
+) -> Result<(Array3<f32>, SolveReport)> {
+    validate_tv_config(config)?;
+    let regularization = PoissonRegularization::Tv {
+        weight: config.tv_weight,
+        epsilon: config.tv_epsilon,
+    };
+    run_richardson_lucy_array3(volume, psf, &config.base, false, regularization)
 }
 
 fn run_richardson_lucy(
@@ -358,6 +383,19 @@ fn run_richardson_lucy_array2(
     run_poisson_em_array2(image, psf, &poisson_config, regularization)
 }
 
+fn run_richardson_lucy_array3(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
+    config: &RichardsonLucy,
+    force_damping: bool,
+    regularization: PoissonRegularization,
+) -> Result<(Array3<f32>, SolveReport)> {
+    let effective_config = resolve_effective_config(config, force_damping);
+    validate_config(&effective_config)?;
+    let poisson_config = PoissonEm::from_richardson_lucy(&effective_config);
+    run_poisson_em_array3(volume, psf, &poisson_config, regularization)
+}
+
 pub(crate) fn run_poisson_em_array2(
     image: &Array2<f32>,
     psf: &Kernel2D,
@@ -387,6 +425,27 @@ pub(crate) fn run_poisson_em_array2(
     )?;
     let restored = PlanarImage::to_array2_gray(&restored_color)?;
     Ok((restored, report))
+}
+
+pub(crate) fn run_poisson_em_array3(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
+) -> Result<(Array3<f32>, SolveReport)> {
+    validate_3d(psf)?;
+    validate_poisson_em_config(config)?;
+    validate_regularization(regularization)?;
+    if volume.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if volume.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let normalized_psf = psf.normalized()?;
+    let op = VolumeOperator3D::new(&normalized_psf, volume.dim())?;
+    restore_volume(volume, &op, config, regularization)
 }
 
 fn restore_color(
@@ -625,6 +684,125 @@ fn restore_channel(
     Ok((normalized, report))
 }
 
+struct VolumeOperator3D {
+    transfer: Array3<Complex32>,
+}
+
+impl VolumeOperator3D {
+    fn new(psf: &Kernel3D, dims: (usize, usize, usize)) -> Result<Self> {
+        Ok(Self {
+            transfer: psf2otf_3d(psf, dims)?.into_inner(),
+        })
+    }
+
+    fn apply(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
+        apply_volume_transfer(input, &self.transfer, false)
+    }
+
+    fn adjoint(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
+        apply_volume_transfer(input, &self.transfer, true)
+    }
+}
+
+fn apply_volume_transfer(
+    input: &Array3<f32>,
+    transfer: &Array3<Complex32>,
+    adjoint: bool,
+) -> Result<Array3<f32>> {
+    if input.dim() != transfer.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let mut cache = PlanCache::new();
+    let mut spectrum = fft3_forward_real(input, &mut cache)?;
+    for ((z, y, x), value) in spectrum.indexed_iter_mut() {
+        let h = transfer[[z, y, x]];
+        let product = if adjoint {
+            *value * h.conj()
+        } else {
+            *value * h
+        };
+        if !product.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        *value = product;
+    }
+    fft3_inverse_complex(&spectrum, &mut cache)
+}
+
+fn restore_volume(
+    input: &Array3<f32>,
+    operator: &VolumeOperator3D,
+    config: &PoissonEm,
+    regularization: PoissonRegularization,
+) -> Result<(Array3<f32>, SolveReport)> {
+    if input.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if input.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let mut estimate = input.to_owned();
+    if config.positivity {
+        estimate = project_nonnegative_3d(&estimate)?;
+    }
+    let (_, height, width) = input.dim();
+    let weights = resolve_weights(config.weights.as_ref(), (height, width))?;
+    let sensitivity = operator.adjoint(&Array3::from_elem(input.dim(), 1.0))?;
+
+    let mut diagnostics = Diagnostics::new();
+    let criteria = StopCriteria {
+        max_iterations: config.iterations,
+        relative_update_tol: config.relative_update_tolerance,
+        objective_plateau_window: 0,
+        objective_plateau_tol: 0.0,
+        divergence_factor: f32::MAX,
+    };
+    let mut stop_reason = StopReason::MaxIterations;
+
+    for iteration in 0..config.iterations {
+        let blurred = operator.apply(&estimate)?;
+        let ratio =
+            multiplicative_ratio_3d(input, &blurred, config.filter_epsilon, config.readout_noise)?;
+        let mut correction = operator.adjoint(&ratio)?;
+        correction = apply_sensitivity_3d(&correction, &sensitivity, config.filter_epsilon)?;
+        correction = apply_update_weights_3d(&correction, weights)?;
+        correction = apply_damping_3d(&correction, config.damping)?;
+        let mut next = elementwise_mul_3d(&estimate, &correction)?;
+        if config.positivity {
+            next = project_nonnegative_3d(&next)?;
+        }
+        next = apply_regularization_3d(&next, regularization, config.positivity)?;
+
+        let objective =
+            poisson_objective_3d(input, &blurred, config.filter_epsilon, config.readout_noise)?;
+        let residual = relative_update_norm_3d(&next, &estimate)?;
+        diagnostics.record(objective, residual)?;
+
+        estimate = next;
+        if let Some(reason) = check_stop(
+            &criteria,
+            iteration + 1,
+            Some(residual),
+            diagnostics.objective_history(),
+        )? {
+            stop_reason = reason;
+            break;
+        }
+    }
+
+    let mut report = diagnostics.finish(stop_reason);
+    if !config.collect_history {
+        report.objective_history.clear();
+        report.residual_history.clear();
+    }
+    report.estimated_nsr = None;
+
+    let normalized = normalize_range_3d(&estimate, config.range_policy)?;
+    Ok((normalized, report))
+}
+
 fn multiplicative_ratio(
     observed: &Array2<f32>,
     predicted: &Array2<f32>,
@@ -644,6 +822,32 @@ fn multiplicative_ratio(
                 return Err(Error::NonFiniteInput);
             }
             ratio[[y, x]] = value;
+        }
+    }
+    Ok(ratio)
+}
+
+fn multiplicative_ratio_3d(
+    observed: &Array3<f32>,
+    predicted: &Array3<f32>,
+    epsilon: f32,
+    readout_noise: f32,
+) -> Result<Array3<f32>> {
+    if observed.dim() != predicted.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    let (depth, height, width) = observed.dim();
+    let mut ratio = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let pred = (predicted[[z, y, x]] + readout_noise).max(epsilon);
+                let value = observed[[z, y, x]] / pred;
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                ratio[[z, y, x]] = value;
+            }
         }
     }
     Ok(ratio)
@@ -677,6 +881,60 @@ fn apply_update_weights(
     Ok(output)
 }
 
+fn apply_update_weights_3d(
+    correction: &Array3<f32>,
+    weights: Option<&Array2<f32>>,
+) -> Result<Array3<f32>> {
+    let Some(weights) = weights else {
+        return Ok(correction.to_owned());
+    };
+
+    let (depth, height, width) = correction.dim();
+    if weights.dim() != (height, width) {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let value = 1.0 + weights[[y, x]] * (correction[[z, y, x]] - 1.0);
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                output[[z, y, x]] = value;
+            }
+        }
+    }
+
+    Ok(output)
+}
+
+fn apply_sensitivity_3d(
+    correction: &Array3<f32>,
+    sensitivity: &Array3<f32>,
+    epsilon: f32,
+) -> Result<Array3<f32>> {
+    if correction.dim() != sensitivity.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    let (depth, height, width) = correction.dim();
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let denom = sensitivity[[z, y, x]].max(epsilon);
+                let value = correction[[z, y, x]] / denom;
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                output[[z, y, x]] = value;
+            }
+        }
+    }
+    Ok(output)
+}
+
 fn apply_damping(correction: &Array2<f32>, damping: Option<f32>) -> Result<Array2<f32>> {
     let Some(damping) = damping else {
         return Ok(correction.to_owned());
@@ -693,6 +951,29 @@ fn apply_damping(correction: &Array2<f32>, damping: Option<f32>) -> Result<Array
                 return Err(Error::NonFiniteInput);
             }
             output[[y, x]] = value;
+        }
+    }
+    Ok(output)
+}
+
+fn apply_damping_3d(correction: &Array3<f32>, damping: Option<f32>) -> Result<Array3<f32>> {
+    let Some(damping) = damping else {
+        return Ok(correction.to_owned());
+    };
+
+    let lower = 1.0 / (1.0 + damping);
+    let upper = 1.0 + damping;
+    let (depth, height, width) = correction.dim();
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let value = correction[[z, y, x]].clamp(lower, upper);
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                output[[z, y, x]] = value;
+            }
         }
     }
     Ok(output)
@@ -715,6 +996,23 @@ fn apply_regularization(
     }
 }
 
+fn apply_regularization_3d(
+    input: &Array3<f32>,
+    regularization: PoissonRegularization,
+    positivity: bool,
+) -> Result<Array3<f32>> {
+    match regularization {
+        PoissonRegularization::None => Ok(input.to_owned()),
+        PoissonRegularization::Tv { weight, epsilon } => {
+            let mut output = tv_regularize_step_3d(input, weight, epsilon)?;
+            if positivity {
+                output = project_nonnegative_3d(&output)?;
+            }
+            Ok(output)
+        }
+    }
+}
+
 fn elementwise_mul(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<Array2<f32>> {
     if lhs.dim() != rhs.dim() {
         return Err(Error::DimensionMismatch);
@@ -728,6 +1026,26 @@ fn elementwise_mul(lhs: &Array2<f32>, rhs: &Array2<f32>) -> Result<Array2<f32>> 
                 return Err(Error::NonFiniteInput);
             }
             output[[y, x]] = value;
+        }
+    }
+    Ok(output)
+}
+
+fn elementwise_mul_3d(lhs: &Array3<f32>, rhs: &Array3<f32>) -> Result<Array3<f32>> {
+    if lhs.dim() != rhs.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    let (depth, height, width) = lhs.dim();
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let value = lhs[[z, y, x]] * rhs[[z, y, x]];
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                output[[z, y, x]] = value;
+            }
         }
     }
     Ok(output)
@@ -753,6 +1071,26 @@ fn relative_update_norm(next: &Array2<f32>, prev: &Array2<f32>) -> Result<f32> {
     Ok(residual)
 }
 
+fn relative_update_norm_3d(next: &Array3<f32>, prev: &Array3<f32>) -> Result<f32> {
+    if next.dim() != prev.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let mut num = 0.0_f32;
+    let mut den = 0.0_f32;
+    for ((z, y, x), value) in next.indexed_iter() {
+        let delta = *value - prev[[z, y, x]];
+        num += delta * delta;
+        den += prev[[z, y, x]] * prev[[z, y, x]];
+    }
+
+    let residual = num.sqrt() / den.max(1e-12).sqrt();
+    if !residual.is_finite() {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(residual)
+}
+
 fn poisson_objective(
     observed: &Array2<f32>,
     predicted: &Array2<f32>,
@@ -766,6 +1104,32 @@ fn poisson_objective(
     let mut objective = 0.0_f32;
     for ((y, x), value) in observed.indexed_iter() {
         let pred = (predicted[[y, x]] + readout_noise).max(epsilon);
+        let term = pred - *value * pred.ln();
+        if !term.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        objective += term;
+    }
+
+    if !objective.is_finite() {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(objective)
+}
+
+fn poisson_objective_3d(
+    observed: &Array3<f32>,
+    predicted: &Array3<f32>,
+    epsilon: f32,
+    readout_noise: f32,
+) -> Result<f32> {
+    if observed.dim() != predicted.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let mut objective = 0.0_f32;
+    for ((z, y, x), value) in observed.indexed_iter() {
+        let pred = (predicted[[z, y, x]] + readout_noise).max(epsilon);
         let term = pred - *value * pred.ln();
         if !term.is_finite() {
             return Err(Error::NonFiniteInput);

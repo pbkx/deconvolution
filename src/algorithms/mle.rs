@@ -1,8 +1,8 @@
 use image::DynamicImage;
-use ndarray::Array2;
+use ndarray::Array3;
 
-use super::rl::{PoissonEm, PoissonRegularization, run_poisson_em, run_poisson_em_array2};
-use crate::{ChannelMode, Error, Kernel2D, RangePolicy, Result, SolveReport};
+use super::rl::{PoissonEm, PoissonRegularization, run_poisson_em, run_poisson_em_array3};
+use crate::{ChannelMode, Error, Kernel2D, Kernel3D, RangePolicy, Result, SolveReport};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cmle {
@@ -251,14 +251,14 @@ pub fn cmle_with(
     run_poisson_em(image, psf, &poisson, PoissonRegularization::None)
 }
 
-pub(crate) fn cmle_array2_with(
-    image: &Array2<f32>,
-    psf: &Kernel2D,
+pub(crate) fn cmle_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
     config: &Cmle,
-) -> Result<(Array2<f32>, SolveReport)> {
+) -> Result<(Array3<f32>, SolveReport)> {
     validate_cmle(config)?;
     let poisson = cmle_poisson_em(config)?;
-    run_poisson_em_array2(image, psf, &poisson, PoissonRegularization::None)
+    run_poisson_em_array3(volume, psf, &poisson, PoissonRegularization::None)
 }
 
 pub fn gmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
@@ -275,14 +275,14 @@ pub fn gmle_with(
     run_poisson_em(image, psf, &poisson, regularization)
 }
 
-pub(crate) fn gmle_array2_with(
-    image: &Array2<f32>,
-    psf: &Kernel2D,
+pub(crate) fn gmle_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
     config: &Gmle,
-) -> Result<(Array2<f32>, SolveReport)> {
+) -> Result<(Array3<f32>, SolveReport)> {
     validate_gmle(config)?;
     let (poisson, regularization) = gmle_poisson_em(config)?;
-    run_poisson_em_array2(image, psf, &poisson, regularization)
+    run_poisson_em_array3(volume, psf, &poisson, regularization)
 }
 
 pub fn qmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
@@ -299,14 +299,14 @@ pub fn qmle_with(
     run_poisson_em(image, psf, &poisson, PoissonRegularization::None)
 }
 
-pub(crate) fn qmle_array2_with(
-    image: &Array2<f32>,
-    psf: &Kernel2D,
+pub(crate) fn qmle_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
     config: &Qmle,
-) -> Result<(Array2<f32>, SolveReport)> {
+) -> Result<(Array3<f32>, SolveReport)> {
     validate_qmle(config)?;
     let poisson = qmle_poisson_em(config)?;
-    run_poisson_em_array2(image, psf, &poisson, PoissonRegularization::None)
+    run_poisson_em_array3(volume, psf, &poisson, PoissonRegularization::None)
 }
 
 fn cmle_poisson_em(config: &Cmle) -> Result<PoissonEm> {

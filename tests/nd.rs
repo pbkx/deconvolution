@@ -3,19 +3,18 @@ use deconvolution::nd;
 use deconvolution::optimization::{Cmle, Gmle, Qmle};
 use deconvolution::psf::basic::{delta2d, delta3d, gaussian3d, motion_linear};
 use deconvolution::psf::init::uniform;
-use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::blur::{blur, blur_3d};
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::{checkerboard_2d, phantom_3d};
 use deconvolution::spectral::Wiener;
-use deconvolution::{Error, Kernel2D, Result, blind::BlindRichardsonLucy};
+use deconvolution::{Error, Result, blind::BlindRichardsonLucy};
 use ndarray::{Array2, Array3, Axis};
 
 #[test]
 fn microscopy_wiener_3d_improves_phantom_restoration() {
     let sharp = phantom_3d((9, 40, 40)).unwrap();
     let psf_3d = gaussian3d((7, 9, 9), 1.4).unwrap();
-    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
-    let degraded = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let degraded = blur_3d(&sharp, &psf_3d).unwrap();
 
     let restored =
         nd::microscopy::wiener_with(&degraded, psf_3d.as_array(), &Wiener::new().nsr(2e-2))
@@ -30,8 +29,7 @@ fn microscopy_wiener_3d_improves_phantom_restoration() {
 fn microscopy_richardson_lucy_3d_improves_phantom_restoration() {
     let sharp = phantom_3d((9, 40, 40)).unwrap();
     let psf_3d = gaussian3d((7, 9, 9), 1.3).unwrap();
-    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
-    let degraded = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let degraded = blur_3d(&sharp, &psf_3d).unwrap();
 
     let (restored, report) = nd::microscopy::richardson_lucy_with(
         &degraded,
@@ -205,8 +203,7 @@ fn blind_nd_path_returns_normalized_psf() {
 fn nd_mle_family_improves_on_microscopy_volume_fixture() {
     let sharp = phantom_3d((9, 40, 40)).unwrap();
     let psf_3d = gaussian3d((7, 9, 9), 1.5).unwrap();
-    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
-    let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let blurred = blur_3d(&sharp, &psf_3d).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 80.0, 9021).unwrap();
 
     let (cmle_restored, cmle_report) = nd::microscopy::cmle_with(
@@ -254,8 +251,7 @@ fn nd_mle_family_improves_on_microscopy_volume_fixture() {
 fn nd_gmle_is_not_worse_than_nd_cmle_on_high_noise_volume() {
     let sharp = phantom_3d((9, 40, 40)).unwrap();
     let psf_3d = gaussian3d((7, 9, 9), 1.6).unwrap();
-    let projected_psf = project_psf3d(psf_3d.as_array()).unwrap();
-    let blurred = blur_volume_slicewise(&sharp, &projected_psf).unwrap();
+    let blurred = blur_3d(&sharp, &psf_3d).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 7.0, 12303).unwrap();
 
     let (cmle_restored, _) = nd::microscopy::cmle_with(
@@ -270,51 +266,14 @@ fn nd_gmle_is_not_worse_than_nd_cmle_on_high_noise_volume() {
         &Gmle::new()
             .iterations(14)
             .snr(8.0)
-            .acuity(0.8)
-            .roughness(1.4),
+            .acuity(0.95)
+            .roughness(0.2),
     )
     .unwrap();
 
     let cmle_mse = mse3(&sharp, &cmle_restored).unwrap();
     let gmle_mse = mse3(&sharp, &gmle_restored).unwrap();
     assert!(gmle_mse <= cmle_mse * 1.01 + 1e-6);
-}
-
-fn project_psf3d(psf: &Array3<f32>) -> Result<Kernel2D> {
-    if psf.is_empty() {
-        return Err(Error::InvalidPsf);
-    }
-    if psf.iter().any(|value| !value.is_finite()) {
-        return Err(Error::NonFiniteInput);
-    }
-
-    let mut projected = psf.sum_axis(Axis(0));
-    let sum = projected.sum();
-    if !sum.is_finite() || sum.abs() <= f32::EPSILON {
-        return Err(Error::InvalidPsf);
-    }
-    for value in &mut projected {
-        *value /= sum;
-    }
-    Kernel2D::new(projected)
-}
-
-fn blur_volume_slicewise(volume: &Array3<f32>, psf: &Kernel2D) -> Result<Array3<f32>> {
-    if volume.is_empty() {
-        return Err(Error::EmptyImage);
-    }
-    if volume.iter().any(|value| !value.is_finite()) {
-        return Err(Error::NonFiniteInput);
-    }
-
-    let (depth, height, width) = volume.dim();
-    let mut output = Array3::zeros((depth, height, width));
-    for z in 0..depth {
-        let slice = volume.index_axis(Axis(0), z).to_owned();
-        let blurred = blur(&slice, psf)?;
-        output.index_axis_mut(Axis(0), z).assign(&blurred);
-    }
-    Ok(output)
 }
 
 fn add_poisson_noise_volume_slicewise(

@@ -1,12 +1,14 @@
-use ndarray::Array2;
+use ndarray::{Array2, Array3};
 use num_complex::Complex32;
 
-use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
+use crate::core::fft::{
+    fft2_forward_real, fft2_inverse_complex, fft3_forward_real, fft3_inverse_complex,
+};
 use crate::core::plan_cache::PlanCache;
-use crate::otf::Transfer2D;
-use crate::otf::convert::psf2otf;
-use crate::psf::Kernel2D;
-use crate::psf::support::validate;
+use crate::otf::convert::{psf2otf, psf2otf_3d};
+use crate::otf::{Transfer2D, Transfer3D};
+use crate::psf::support::{validate, validate_3d};
+use crate::psf::{Kernel2D, Kernel3D};
 use crate::simulate::noise::{add_gaussian_noise, add_poisson_noise, add_readout_noise};
 use crate::{Error, Result};
 
@@ -31,6 +33,29 @@ pub fn blur_otf(input: &Array2<f32>, otf: &Transfer2D) -> Result<Array2<f32>> {
     let mut spectrum = fft2_forward_real(input, &mut cache)?;
     multiply_in_place(&mut spectrum, otf.as_array())?;
     fft2_inverse_complex(&spectrum, &mut cache)
+}
+
+pub fn blur_3d(input: &Array3<f32>, psf: &Kernel3D) -> Result<Array3<f32>> {
+    validate_input_3d(input)?;
+    validate_3d(psf)?;
+
+    let otf = psf2otf_3d(psf, input.dim())?;
+    blur_otf_3d(input, &otf)
+}
+
+pub fn blur_otf_3d(input: &Array3<f32>, otf: &Transfer3D) -> Result<Array3<f32>> {
+    validate_input_3d(input)?;
+    if input.dim() != otf.dims() {
+        return Err(Error::DimensionMismatch);
+    }
+    if !otf.is_finite() {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let mut cache = PlanCache::new();
+    let mut spectrum = fft3_forward_real(input, &mut cache)?;
+    multiply_in_place_3d(&mut spectrum, otf.as_array())?;
+    fft3_inverse_complex(&spectrum, &mut cache)
 }
 
 pub fn degrade(
@@ -75,7 +100,33 @@ fn multiply_in_place(lhs: &mut Array2<Complex32>, rhs: &Array2<Complex32>) -> Re
     Ok(())
 }
 
+fn multiply_in_place_3d(lhs: &mut Array3<Complex32>, rhs: &Array3<Complex32>) -> Result<()> {
+    if lhs.dim() != rhs.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+
+    for ((z, y, x), value) in lhs.indexed_iter_mut() {
+        let product = *value * rhs[[z, y, x]];
+        if !product.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        *value = product;
+    }
+
+    Ok(())
+}
+
 fn validate_input(input: &Array2<f32>) -> Result<()> {
+    if input.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if input.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+    Ok(())
+}
+
+fn validate_input_3d(input: &Array3<f32>) -> Result<()> {
     if input.is_empty() {
         return Err(Error::EmptyImage);
     }

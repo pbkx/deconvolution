@@ -9,3 +9,4 @@ pub use apodize::apodize;
 pub use edgetaper::edgetaper;
 pub use estimate::estimate_nsr;
 pub use normalize::normalize_range;
+pub(crate) use normalize::normalize_range_3d;

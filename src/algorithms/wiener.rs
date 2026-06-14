@@ -3,14 +3,16 @@ use ndarray::{Array2, Array3, Axis};
 use num_complex::Complex32;
 
 use crate::core::convert::{PlanarImage, rebuild_dynamic_like};
-use crate::core::fft::{fft2_forward_real, fft2_inverse_complex};
+use crate::core::fft::{
+    fft2_forward_real, fft2_inverse_complex, fft3_forward_real, fft3_inverse_complex,
+};
 use crate::core::plan_cache::PlanCache;
 use crate::core::util::next_fast_len;
 use crate::otf::Transfer2D;
-use crate::otf::convert::psf2otf;
-use crate::preprocess::normalize_range;
-use crate::psf::Kernel2D;
-use crate::psf::support::validate;
+use crate::otf::convert::{psf2otf, psf2otf_3d};
+use crate::preprocess::{normalize_range, normalize_range_3d};
+use crate::psf::support::{validate, validate_3d};
+use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Boundary, ChannelMode, Error, Padding, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -245,6 +247,43 @@ pub(crate) fn wiener_array2_with(
     }
 
     PlanarImage::to_array2_gray(&restored_color)
+}
+
+pub(crate) fn wiener_array3_with(
+    volume: &Array3<f32>,
+    psf: &Kernel3D,
+    config: &Wiener,
+) -> Result<Array3<f32>> {
+    validate_3d(psf)?;
+    validate_config_3d(config)?;
+    if volume.is_empty() {
+        return Err(Error::EmptyImage);
+    }
+    if volume.iter().any(|value| !value.is_finite()) {
+        return Err(Error::NonFiniteInput);
+    }
+
+    let (depth, height, width) = volume.dim();
+    let fft_dims = resolve_fft_dims_3d((depth, height, width), psf.dims(), config.padding)?;
+    let blur_transfer = psf2otf_3d(psf, fft_dims)?.into_inner();
+    let padded = pad_to_dims_3d(volume, fft_dims, config.boundary)?;
+    let mut cache = PlanCache::new();
+    let mut spectrum = fft3_forward_real(&padded, &mut cache)?;
+    let stats = apply_wiener_3d(&mut spectrum, &blur_transfer, config.nsr)?;
+    if config.collect_history {
+        validate_stats(&[stats])?;
+    }
+    let restored = fft3_inverse_complex(&spectrum, &mut cache)?;
+
+    let mut cropped = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                cropped[[z, y, x]] = restored[[z, y, x]];
+            }
+        }
+    }
+    normalize_range_3d(&cropped, config.range_policy)
 }
 
 pub fn unsupervised_wiener(
@@ -767,6 +806,58 @@ fn apply_wiener(
     })
 }
 
+fn apply_wiener_3d(
+    spectrum: &mut Array3<Complex32>,
+    blur_transfer: &Array3<Complex32>,
+    nsr: f32,
+) -> Result<ChannelStats> {
+    if spectrum.dim() != blur_transfer.dim() {
+        return Err(Error::DimensionMismatch);
+    }
+    if !nsr.is_finite() || nsr < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let mut denom_sum = 0.0_f32;
+    let mut filter_sum = 0.0_f32;
+    let mut signal_sum = 0.0_f32;
+    let mut noise_sum = 0.0_f32;
+    let mut count = 0usize;
+
+    for ((z, y, x), value) in spectrum.indexed_iter_mut() {
+        let h = blur_transfer[[z, y, x]];
+        let denom = (h.norm_sqr() + nsr).max(1e-8);
+        let filter = h.conj() / denom;
+        let observed = *value;
+        let restored = filter * observed;
+        if !restored.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+        let residual = observed - h * restored;
+        if !residual.is_finite() {
+            return Err(Error::NonFiniteInput);
+        }
+
+        *value = restored;
+        denom_sum += denom;
+        filter_sum += filter.norm();
+        signal_sum += restored.norm_sqr();
+        noise_sum += residual.norm_sqr();
+        count += 1;
+    }
+
+    if count == 0 {
+        return Err(Error::InvalidParameter);
+    }
+    let inv = 1.0 / (count as f32);
+    Ok(ChannelStats {
+        mean_denom: denom_sum * inv,
+        mean_filter_norm: filter_sum * inv,
+        signal_power: signal_sum * inv,
+        noise_power: noise_sum * inv,
+    })
+}
+
 fn pad_to_dims(
     input: &Array2<f32>,
     dims: (usize, usize),
@@ -787,6 +878,34 @@ fn pad_to_dims(
                 (Some(sy), Some(sx)) => input[[sy, sx]],
                 _ => 0.0,
             };
+        }
+    }
+    Ok(padded)
+}
+
+fn pad_to_dims_3d(
+    input: &Array3<f32>,
+    dims: (usize, usize, usize),
+    boundary: Boundary,
+) -> Result<Array3<f32>> {
+    let (depth, height, width) = input.dim();
+    let (target_d, target_h, target_w) = dims;
+    if target_d < depth || target_h < height || target_w < width {
+        return Err(Error::DimensionMismatch);
+    }
+
+    let mut padded = Array3::zeros((target_d, target_h, target_w));
+    for z in 0..target_d {
+        let source_z = map_boundary_index(z as i64, depth, boundary)?;
+        for y in 0..target_h {
+            let source_y = map_boundary_index(y as i64, height, boundary)?;
+            for x in 0..target_w {
+                let source_x = map_boundary_index(x as i64, width, boundary)?;
+                padded[[z, y, x]] = match (source_z, source_y, source_x) {
+                    (Some(sz), Some(sy), Some(sx)) => input[[sz, sy, sx]],
+                    _ => 0.0,
+                };
+            }
         }
     }
     Ok(padded)
@@ -882,6 +1001,57 @@ fn resolve_fft_dims(
     }
 }
 
+fn resolve_fft_dims_3d(
+    image_dims: (usize, usize, usize),
+    psf_dims: (usize, usize, usize),
+    padding: Padding,
+) -> Result<(usize, usize, usize)> {
+    let (image_d, image_h, image_w) = image_dims;
+    let (psf_d, psf_h, psf_w) = psf_dims;
+    if image_d == 0 || image_h == 0 || image_w == 0 || psf_d == 0 || psf_h == 0 || psf_w == 0 {
+        return Err(Error::InvalidParameter);
+    }
+
+    let minimal_d = image_d
+        .checked_add(psf_d)
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(Error::InvalidParameter)?;
+    let minimal_h = image_h
+        .checked_add(psf_h)
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(Error::InvalidParameter)?;
+    let minimal_w = image_w
+        .checked_add(psf_w)
+        .and_then(|value| value.checked_sub(1))
+        .ok_or(Error::InvalidParameter)?;
+
+    match padding {
+        Padding::None | Padding::Same => Ok((image_d, image_h, image_w)),
+        Padding::Minimal => Ok((minimal_d, minimal_h, minimal_w)),
+        Padding::NextFastLen => Ok((
+            next_fast_len(minimal_d),
+            next_fast_len(minimal_h),
+            next_fast_len(minimal_w),
+        )),
+        Padding::Explicit2(_, _) => Err(Error::InvalidParameter),
+        Padding::Explicit3(depth, height, width) => {
+            if depth == 0 || height == 0 || width == 0 {
+                return Err(Error::InvalidParameter);
+            }
+            if depth < image_d
+                || height < image_h
+                || width < image_w
+                || depth < psf_d
+                || height < psf_h
+                || width < psf_w
+            {
+                return Err(Error::DimensionMismatch);
+            }
+            Ok((depth, height, width))
+        }
+    }
+}
+
 fn validate_stats(stats: &[ChannelStats]) -> Result<()> {
     for stat in stats {
         if !stat.mean_denom.is_finite()
@@ -946,6 +1116,19 @@ fn validate_config(config: &Wiener) -> Result<()> {
         return Err(Error::InvalidParameter);
     }
     if let Padding::Explicit3(_, _, _) = config.padding {
+        return Err(Error::InvalidParameter);
+    }
+    Ok(())
+}
+
+fn validate_config_3d(config: &Wiener) -> Result<()> {
+    if !config.nsr.is_finite() || config.nsr < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if config.noise_autocorr.is_some() || config.image_autocorr.is_some() {
+        return Err(Error::InvalidParameter);
+    }
+    if let Padding::Explicit2(_, _) = config.padding {
         return Err(Error::InvalidParameter);
     }
     Ok(())

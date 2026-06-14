@@ -7,7 +7,7 @@ use crate::core::diagnostics::Diagnostics;
 use crate::core::operator::{LinearOperator2D, inner_product_2d};
 use crate::core::projections::project_nonnegative_2d;
 use crate::core::stopping::{StopCriteria, check_stop};
-use crate::core::validate::finite_real_2d;
+use crate::core::validate::{finite_real_2d, finite_real_3d};
 use crate::preprocess::normalize_range;
 use crate::psf::Kernel2D;
 use crate::psf::support::validate;
@@ -64,6 +64,75 @@ pub(crate) fn tv_regularize_step_2d(
                 return Err(Error::NonFiniteInput);
             }
             output[[y, x]] = value;
+        }
+    }
+
+    Ok(output)
+}
+
+pub(crate) fn tv_regularize_step_3d(
+    input: &Array3<f32>,
+    weight: f32,
+    epsilon: f32,
+) -> Result<Array3<f32>> {
+    finite_real_3d(input)?;
+    if !weight.is_finite() || weight < 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if !epsilon.is_finite() || epsilon <= 0.0 {
+        return Err(Error::InvalidParameter);
+    }
+    if weight <= f32::EPSILON {
+        return Ok(input.to_owned());
+    }
+
+    let (depth, height, width) = input.dim();
+    let mut pz = Array3::zeros((depth, height, width));
+    let mut py = Array3::zeros((depth, height, width));
+    let mut px = Array3::zeros((depth, height, width));
+
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let dz = if z + 1 < depth {
+                    input[[z + 1, y, x]] - input[[z, y, x]]
+                } else {
+                    0.0
+                };
+                let dy = if y + 1 < height {
+                    input[[z, y + 1, x]] - input[[z, y, x]]
+                } else {
+                    0.0
+                };
+                let dx = if x + 1 < width {
+                    input[[z, y, x + 1]] - input[[z, y, x]]
+                } else {
+                    0.0
+                };
+                let norm = (dz * dz + dy * dy + dx * dx + epsilon * epsilon).sqrt();
+                if !norm.is_finite() || norm <= 0.0 {
+                    return Err(Error::NonFiniteInput);
+                }
+                pz[[z, y, x]] = dz / norm;
+                py[[z, y, x]] = dy / norm;
+                px[[z, y, x]] = dx / norm;
+            }
+        }
+    }
+
+    let mut output = Array3::zeros((depth, height, width));
+    for z in 0..depth {
+        for y in 0..height {
+            for x in 0..width {
+                let div_z = pz[[z, y, x]] - if z > 0 { pz[[z - 1, y, x]] } else { 0.0 };
+                let div_y = py[[z, y, x]] - if y > 0 { py[[z, y - 1, x]] } else { 0.0 };
+                let div_x = px[[z, y, x]] - if x > 0 { px[[z, y, x - 1]] } else { 0.0 };
+                let value = input[[z, y, x]] + weight * (div_z + div_y + div_x);
+                if !value.is_finite() {
+                    return Err(Error::NonFiniteInput);
+                }
+                output[[z, y, x]] = value;
+            }
         }
     }
 

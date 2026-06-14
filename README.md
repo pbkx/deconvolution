@@ -343,6 +343,8 @@ Blur and degradation:
 
 - `simulate::blur::blur`
 - `simulate::blur::blur_otf`
+- `simulate::blur::blur_3d`
+- `simulate::blur::blur_otf_3d`
 - `simulate::blur::degrade`
 
 Noise models:

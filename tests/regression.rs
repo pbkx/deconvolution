@@ -5,9 +5,8 @@ use deconvolution::iterative::{RichardsonLucy, richardson_lucy_with};
 use deconvolution::nd;
 use deconvolution::optimization::{Cmle, Gmle, Qmle, cmle_with, gmle_with, qmle_with};
 use deconvolution::otf::convert::{otf2psf, otf2psf_3d, psf2otf, psf2otf_3d};
-use deconvolution::psf::Kernel3D;
 use deconvolution::psf::basic::{gaussian2d, gaussian3d};
-use deconvolution::simulate::blur::blur;
+use deconvolution::simulate::blur::{blur, blur_3d};
 use deconvolution::simulate::noise::add_poisson_noise;
 use deconvolution::simulate::phantom::{checkerboard_2d, gaussian_blob_2d, phantom_3d};
 use deconvolution::spectral::{Wiener, wiener_with};
@@ -151,8 +150,7 @@ fn alpha_channel_behavior_is_preserved() {
 fn nd_volume_regression_metrics_hold() {
     let sharp = phantom_3d((9, 40, 40)).unwrap();
     let psf_3d = gaussian3d((7, 9, 9), 1.5).unwrap();
-    let projected = project_psf3d(psf_3d.as_array()).unwrap();
-    let blurred = blur_volume_slicewise(&sharp, &projected).unwrap();
+    let blurred = blur_3d(&sharp, &psf_3d).unwrap();
     let degraded = add_poisson_noise_volume_slicewise(&blurred, 80.0, 2223).unwrap();
 
     let (restored, report) = nd::microscopy::qmle_with(
@@ -167,43 +165,6 @@ fn nd_volume_regression_metrics_hold() {
     assert!(is_finite_3d(&restored));
     assert!(restored.iter().all(|value| *value >= 0.0));
     assert!(report.iterations >= 1);
-}
-
-fn project_psf3d(psf: &Array3<f32>) -> deconvolution::Result<Kernel3D> {
-    let mut kernel = Kernel3D::new(psf.to_owned())?;
-    kernel.normalize()?;
-    Ok(kernel)
-}
-
-fn blur_volume_slicewise(
-    volume: &Array3<f32>,
-    psf: &Kernel3D,
-) -> deconvolution::Result<Array3<f32>> {
-    if volume.is_empty() {
-        return Err(Error::EmptyImage);
-    }
-    if volume.iter().any(|value| !value.is_finite()) {
-        return Err(Error::NonFiniteInput);
-    }
-
-    let mut projected = psf.as_array().sum_axis(Axis(0));
-    let sum = projected.sum();
-    if !sum.is_finite() || sum.abs() <= f32::EPSILON {
-        return Err(Error::InvalidPsf);
-    }
-    for value in &mut projected {
-        *value /= sum;
-    }
-    let projected = deconvolution::Kernel2D::new(projected)?;
-
-    let (depth, height, width) = volume.dim();
-    let mut output = Array3::zeros((depth, height, width));
-    for z in 0..depth {
-        let slice = volume.index_axis(Axis(0), z).to_owned();
-        let blurred = blur(&slice, &projected)?;
-        output.index_axis_mut(Axis(0), z).assign(&blurred);
-    }
-    Ok(output)
 }
 
 fn add_poisson_noise_volume_slicewise(
