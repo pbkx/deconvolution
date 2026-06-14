@@ -178,6 +178,9 @@
 //! - [`blind::maximum_likelihood`]
 //! - [`blind::parametric`]
 //!
+//! [`blind::maximum_likelihood`] shares the same Poisson EM restoration core as
+//! blind Richardson-Lucy.
+//!
 //! Configuration and output types:
 //!
 //! - [`blind::BlindRichardsonLucy`]
