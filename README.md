@@ -41,7 +41,7 @@ cargo add deconvolution
 
 ```toml
 [dependencies]
-deconvolution = "0.1.0"
+deconvolution = "0.2.0"
 ```
 
 Image loading: Add `image` when your application opens or saves image files.
@@ -54,7 +54,7 @@ Serial build: Disable default features to turn off `rayon`.
 
 ```toml
 [dependencies]
-deconvolution = { version = "0.1.0", default-features = false }
+deconvolution = { version = "0.2.0", default-features = false }
 ```
 
 ### Quick Start
