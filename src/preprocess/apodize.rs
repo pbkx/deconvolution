@@ -1,3 +1,8 @@
+//! Edge-windowing helpers for reducing boundary discontinuities.
+//!
+//! Use [`apodize`] or [`window_edges`] before FFT-heavy workflows when hard
+//! image borders would otherwise produce ringing.
+
 use std::f32::consts::FRAC_PI_2;
 
 use ndarray::Array2;

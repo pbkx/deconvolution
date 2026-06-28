@@ -18,6 +18,10 @@ use crate::psf::{Kernel2D, Kernel3D};
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Richardson-Lucy deconvolution with a known 2D PSF.
+///
+/// Defaults run 30 Poisson EM iterations, keep history, and enforce
+/// nonnegative estimates.
 pub struct RichardsonLucy {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -110,6 +114,10 @@ impl RichardsonLucy {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Richardson-Lucy configuration with total-variation regularization.
+///
+/// The base Richardson-Lucy options are preserved, with additional TV weight
+/// and epsilon controls.
 pub struct RichardsonLucyTv {
     base: RichardsonLucy,
     tv_weight: f32,

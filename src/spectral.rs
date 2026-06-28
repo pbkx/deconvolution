@@ -1,3 +1,8 @@
+//! Frequency-domain deconvolution algorithms.
+//!
+//! Use [`Wiener`] for configurable Wiener filtering, [`wiener`] for the default
+//! path, and inverse-filter builders when you need direct spectral division.
+
 pub use crate::algorithms::{
     InverseFilter, RegularizedInverseFilter, TikhonovInverseFilter, UnsupervisedWiener, Wiener,
     inverse_filter, inverse_filter_with, naive_inverse_filter, naive_inverse_filter_with,

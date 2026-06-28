@@ -1,3 +1,8 @@
+//! Blind deconvolution wrappers for `ndarray` images.
+//!
+//! Inputs use `(height, width)` order and convert through the [`NdSample`]
+//! `f32` compute path.
+
 use ndarray::Array2;
 
 use super::convert::{NdSample, array2_from_f32, array2_to_f32, kernel2_from_samples};

@@ -140,12 +140,16 @@ pub(crate) fn tv_regularize_step_3d(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Sparse representation used by proximal solvers.
 pub enum SparseBasis {
+    /// Penalize samples directly in image space.
     Pixel,
+    /// Penalize coefficients in a Haar wavelet basis.
     Haar,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for iterative shrinkage-thresholding deconvolution.
 pub struct Ista {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -226,6 +230,7 @@ impl Ista {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for accelerated iterative shrinkage-thresholding deconvolution.
 pub struct Fista {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

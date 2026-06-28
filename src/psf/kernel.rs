@@ -4,6 +4,10 @@ use crate::otf::{Transfer2D, Transfer3D};
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
+/// 2D point-spread function stored as an `(height, width)` `f32` array.
+///
+/// Constructors copy data into standard layout and reject empty or non-finite
+/// arrays. Use [`Kernel2D::normalized`] when the PSF should sum to `1`.
 pub struct Kernel2D {
     data: Array2<f32>,
 }
@@ -48,6 +52,10 @@ impl Kernel2D {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// 3D point-spread function stored as a `(depth, height, width)` `f32` array.
+///
+/// Constructors copy data into standard layout and reject empty or non-finite
+/// arrays. Use [`Kernel3D::normalized`] when the PSF should sum to `1`.
 pub struct Kernel3D {
     data: Array3<f32>,
 }
@@ -92,8 +100,11 @@ impl Kernel3D {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Borrowed 2D blur representation accepted by convolution helpers.
 pub enum Blur2D<'a> {
+    /// Spatial-domain point-spread function.
     Psf(&'a Kernel2D),
+    /// Frequency-domain optical transfer function.
     Otf(&'a Transfer2D),
 }
 
@@ -107,8 +118,11 @@ impl Blur2D<'_> {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Borrowed 3D blur representation accepted by volume convolution helpers.
 pub enum Blur3D<'a> {
+    /// Spatial-domain point-spread function.
     Psf(&'a Kernel3D),
+    /// Frequency-domain optical transfer function.
     Otf(&'a Transfer3D),
 }
 

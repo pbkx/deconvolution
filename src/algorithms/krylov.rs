@@ -13,6 +13,7 @@ use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for modified residual norm steepest descent.
 pub struct Mrnsd {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -72,6 +73,7 @@ impl Mrnsd {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for conjugate-gradient least-squares deconvolution.
 pub struct Cgls {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -138,6 +140,7 @@ impl Cgls {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for weighted Poisson likelihood deconvolution.
 pub struct Wpl {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -211,6 +214,7 @@ impl Wpl {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for hybrid Krylov deconvolution with Tikhonov damping.
 pub struct Hybr {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

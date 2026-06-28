@@ -1,3 +1,8 @@
+//! Synthetic images and volumes for examples and regression tests.
+//!
+//! 2D helpers return `(height, width)` arrays or `image::RgbImage` values, and
+//! [`phantom_3d`] returns `(depth, height, width)` data.
+
 use image::{Rgb, RgbImage};
 use ndarray::{Array2, Array3};
 

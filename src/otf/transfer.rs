@@ -4,6 +4,10 @@ use num_complex::Complex32;
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
+/// 2D optical transfer function stored as an `(height, width)` complex array.
+///
+/// Constructors copy data into standard layout and reject empty or non-finite
+/// arrays. The dimensions should match the padded image used for spectral work.
 pub struct Transfer2D {
     data: Array2<Complex32>,
 }
@@ -56,6 +60,10 @@ impl Transfer2D {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// 3D optical transfer function stored as a `(depth, height, width)` complex array.
+///
+/// Constructors copy data into standard layout and reject empty or non-finite
+/// arrays. The dimensions should match the padded volume used for spectral work.
 pub struct Transfer3D {
     data: Array3<Complex32>,
 }

@@ -1,3 +1,8 @@
+//! Point-spread function types, generators, constraints, and support helpers.
+//!
+//! Use [`Kernel2D`] or [`Kernel3D`] to wrap validated PSF arrays, [`basic`] for
+//! common analytic kernels, and [`constraints`] for blind PSF projections.
+
 pub mod basic;
 pub mod constraints;
 pub mod init;

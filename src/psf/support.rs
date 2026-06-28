@@ -1,3 +1,8 @@
+//! PSF normalization, centering, padding, cropping, flipping, and masks.
+//!
+//! Use these helpers to prepare [`crate::Kernel2D`] and [`crate::Kernel3D`]
+//! values before conversion or restoration.
+
 use ndarray::{Array2, Array3};
 
 use crate::{Error, Kernel2D, Kernel3D, Result};

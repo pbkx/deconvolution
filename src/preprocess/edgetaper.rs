@@ -1,3 +1,8 @@
+//! Edge tapering for reducing convolution boundary artifacts.
+//!
+//! Use [`edgetaper`] when a known PSF creates visible ringing near image
+//! borders after restoration.
+
 use std::f32::consts::FRAC_PI_2;
 
 use ndarray::Array2;

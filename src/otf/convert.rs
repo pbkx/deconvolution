@@ -1,3 +1,8 @@
+//! Conversion between spatial PSFs and frequency-domain OTFs.
+//!
+//! Use [`psf2otf`] and [`psf2otf_3d`] before spectral restoration when the
+//! caller has a [`crate::psf::Kernel2D`] or [`crate::psf::Kernel3D`].
+
 use ndarray::{Array2, Array3};
 
 use crate::core::fft::{

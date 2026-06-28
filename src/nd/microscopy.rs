@@ -1,3 +1,8 @@
+//! 3D `ndarray` deconvolution wrappers for microscopy volumes.
+//!
+//! Volume and PSF arrays use `(depth, height, width)` order and are restored
+//! through the same configuration builders as the image APIs.
+
 use ndarray::Array3;
 
 use crate::algorithms;

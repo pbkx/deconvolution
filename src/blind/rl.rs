@@ -14,6 +14,10 @@ use crate::{Error, Result, StopReason};
 use super::{BlindOutput, BlindReport};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for blind Richardson-Lucy deconvolution.
+///
+/// The solver alternates image and PSF updates and applies configured
+/// [`PsfConstraint`] values after PSF updates.
 pub struct BlindRichardsonLucy {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

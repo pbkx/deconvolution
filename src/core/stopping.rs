@@ -1,10 +1,15 @@
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Reason an iterative solver stopped.
 pub enum StopReason {
+    /// The configured maximum iteration count was reached.
     MaxIterations,
+    /// The relative update norm reached the configured tolerance.
     RelativeUpdate,
+    /// The objective value changed less than the configured plateau tolerance.
     ObjectivePlateau,
+    /// The objective increased enough to trigger divergence detection.
     Divergence,
 }
 

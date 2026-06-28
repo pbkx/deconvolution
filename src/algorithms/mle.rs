@@ -5,6 +5,7 @@ use super::rl::{PoissonEm, PoissonRegularization, run_poisson_em, run_poisson_em
 use crate::{ChannelMode, Error, Kernel2D, Kernel3D, RangePolicy, Result, SolveReport};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for classical maximum-likelihood estimation.
 pub struct Cmle {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -78,6 +79,7 @@ impl Cmle {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Gaussian maximum-likelihood estimation.
 pub struct Gmle {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -165,6 +167,7 @@ impl Gmle {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for quadratic maximum-likelihood estimation.
 pub struct Qmle {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

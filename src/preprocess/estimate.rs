@@ -1,3 +1,8 @@
+//! Noise-to-signal estimation helpers.
+//!
+//! Use [`estimate_nsr`] to compute a scalar NSR for Wiener filtering when a
+//! separate noise model is not available.
+
 use ndarray::Array2;
 use ndarray::array;
 

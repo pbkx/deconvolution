@@ -1,3 +1,8 @@
+//! Reproducible noise models for synthetic restoration tests.
+//!
+//! The noise helpers take a `seed` so examples and tests can produce stable
+//! noisy inputs.
+
 use ndarray::Array2;
 use rand::SeedableRng;
 use rand::rngs::StdRng;

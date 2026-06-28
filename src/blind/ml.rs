@@ -7,8 +7,10 @@ use crate::{Error, Result};
 use super::BlindOutput;
 use super::rl::{BlindPoissonEm, restore_poisson_em_array2, restore_poisson_em_dynamic};
 
-/// Shares the same Poisson EM restoration core as blind Richardson-Lucy.
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for blind maximum-likelihood deconvolution.
+///
+/// This shares the same Poisson EM restoration core as blind Richardson-Lucy.
 pub struct BlindMaximumLikelihood {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

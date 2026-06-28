@@ -11,9 +11,15 @@ mod sealed {
     impl Sealed for half::f16 {}
 }
 
+/// Scalar type accepted by the ndarray convenience APIs.
+///
+/// Implementations convert through `f32`. The trait is sealed so downstream
+/// crates cannot add sample types with different finite-value behavior.
 pub trait NdSample: Copy + sealed::Sealed {
+    /// Convert a sample into the crate's `f32` compute path.
     fn to_f32(self) -> Result<f32>;
 
+    /// Convert a finite `f32` solver output back into the sample type.
     fn from_f32(value: f32) -> Result<Self>;
 }
 

@@ -1,3 +1,8 @@
+//! Initial PSF guesses for blind deconvolution.
+//!
+//! Use these helpers to create normalized starting kernels before calling
+//! [`crate::blind`] solvers.
+
 use ndarray::Array2;
 
 use crate::psf::basic::{gaussian2d, motion_linear};

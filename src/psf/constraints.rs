@@ -1,11 +1,20 @@
+//! Constraints and projections for estimated point-spread functions.
+//!
+//! Use [`PsfConstraint`] with blind deconvolution builders to keep candidate
+//! PSFs nonnegative, normalized, or within a support mask.
+
 use ndarray::Array2;
 
 use crate::{Error, Kernel2D, Result};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Projection applied to a candidate point-spread function.
 pub enum PsfConstraint {
+    /// Clamp negative kernel samples to `0`.
     Nonnegative,
+    /// Normalize the kernel so its sum is `1`.
     NormalizeSum,
+    /// Zero samples where the `(height, width)` mask is `false`.
     SupportMask(Array2<bool>),
 }
 

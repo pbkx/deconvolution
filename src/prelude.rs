@@ -1,3 +1,8 @@
+//! Common imports for simple deconvolution workflows.
+//!
+//! This prelude gathers the primary algorithm configs, kernel/transfer types,
+//! error types, and shared option enums used by most callers.
+
 pub use crate::core::diagnostics::SolveReport;
 pub use crate::core::stopping::StopReason;
 pub use crate::error::{Error, Result};

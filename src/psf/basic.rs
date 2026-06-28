@@ -1,3 +1,8 @@
+//! Basic analytic PSF generators.
+//!
+//! Use this module for common 2D and 3D kernels such as [`gaussian2d`],
+//! [`motion_linear`], and [`disk`].
+
 use ndarray::{Array2, Array3};
 
 use crate::{Error, Kernel2D, Kernel3D, Result};

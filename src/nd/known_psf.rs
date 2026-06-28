@@ -1,3 +1,8 @@
+//! Known-PSF `ndarray` deconvolution wrappers.
+//!
+//! Inputs use `(height, width)` order. The `f16` feature enables half-precision
+//! sample inputs, but computation still runs through `f32`.
+
 use ndarray::Array2;
 
 use super::convert::{NdSample, array2_from_f32, array2_to_f32, kernel2_from_samples};

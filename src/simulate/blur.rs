@@ -1,3 +1,8 @@
+//! Synthetic blur and degradation helpers.
+//!
+//! Use [`blur`] and [`blur_3d`] to apply spatial PSFs, or [`blur_otf`] and
+//! [`blur_otf_3d`] when the transfer function is already available.
+
 use ndarray::{Array2, Array3};
 use num_complex::Complex32;
 

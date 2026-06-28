@@ -16,6 +16,7 @@ use crate::psf::support::validate;
 use crate::{Error, Padding, RangePolicy, Result};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration shared by naive, stabilized, and truncated inverse filters.
 pub struct InverseFilter {
     stabilization_floor: f32,
     truncation_cutoff: f32,
@@ -61,6 +62,9 @@ impl InverseFilter {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Configuration for inverse filtering with a borrowed regularization operator.
+///
+/// The regularizer reference must outlive the solver call.
 pub struct RegularizedInverseFilter<'a> {
     lambda: f32,
     stabilization_floor: f32,
@@ -113,6 +117,7 @@ impl<'a> RegularizedInverseFilter<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Configuration for closed-form Tikhonov inverse filtering.
 pub struct TikhonovInverseFilter {
     lambda: f32,
     stabilization_floor: f32,

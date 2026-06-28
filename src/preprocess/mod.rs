@@ -1,3 +1,9 @@
+//! Image preprocessing helpers used before restoration.
+//!
+//! Use [`normalize_range`] to map image values into a solver-friendly range,
+//! [`edgetaper()`] to reduce boundary ringing, and [`estimate_nsr`] to estimate
+//! a scalar noise-to-signal ratio.
+
 pub mod apodize;
 mod boundary;
 pub mod edgetaper;

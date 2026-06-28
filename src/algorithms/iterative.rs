@@ -14,6 +14,7 @@ use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Landweber iterative least-squares deconvolution.
 pub struct Landweber {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -80,6 +81,7 @@ impl Landweber {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Van Cittert fixed-point deconvolution.
 pub struct VanCittert {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -146,6 +148,7 @@ impl VanCittert {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Tikhonov-Miller iterative deconvolution.
 pub struct TikhonovMiller {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -219,6 +222,7 @@ impl TikhonovMiller {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for iterative constrained Tikhonov-Miller deconvolution.
 pub struct Ictm {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

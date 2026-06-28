@@ -1,3 +1,8 @@
+//! Analytic optical transfer function generators.
+//!
+//! Use these helpers when a frequency-domain model is known directly instead
+//! of being converted from a spatial PSF.
+
 use std::f32::consts::PI;
 
 use ndarray::Array2;

@@ -13,6 +13,7 @@ use crate::psf::support::validate;
 use crate::{ChannelMode, Error, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for non-negative least-squares deconvolution.
 pub struct Nnls {
     iterations: usize,
     relative_update_tolerance: Option<f32>,
@@ -72,6 +73,9 @@ impl Nnls {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for bounded-variable least-squares deconvolution.
+///
+/// Defaults constrain restored samples to `[0, 255]`.
 pub struct Bvls {
     iterations: usize,
     relative_update_tolerance: Option<f32>,

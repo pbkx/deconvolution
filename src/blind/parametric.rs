@@ -15,20 +15,32 @@ use crate::{Error, Result, StopReason};
 use super::{BlindOutput, BlindReport};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Parametric 2D PSF model optimized by [`BlindParametric`].
 pub enum ParametricPsf {
+    /// Isotropic Gaussian PSF with `sigma` in pixels.
     Gaussian {
+        /// Standard deviation in pixels.
         sigma: f32,
     },
+    /// Linear motion PSF.
     MotionLinear {
+        /// Motion length in pixels.
         length: f32,
+        /// Motion angle in degrees.
         angle_deg: f32,
     },
+    /// Circular defocus PSF.
     Defocus {
+        /// Disk radius in pixels.
         radius: f32,
     },
+    /// Anisotropic Gaussian PSF with a major and minor axis.
     OrientedGaussian {
+        /// Major-axis standard deviation in pixels.
         sigma_major: f32,
+        /// Minor-axis standard deviation in pixels.
         sigma_minor: f32,
+        /// Major-axis angle in degrees.
         angle_deg: f32,
     },
 }
@@ -56,6 +68,7 @@ impl ParametricPsf {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for blind deconvolution over a small parametric PSF family.
 pub struct BlindParametric {
     iterations: usize,
     image_iterations: usize,

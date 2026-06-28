@@ -1,3 +1,8 @@
+//! Blind deconvolution solvers that estimate both the latent image and PSF.
+//!
+//! Use [`richardson_lucy`] or [`maximum_likelihood`] when the blur kernel is
+//! unknown, and [`parametric`] when the PSF can be described by [`ParametricPsf`].
+
 mod ml;
 mod output;
 mod parametric;

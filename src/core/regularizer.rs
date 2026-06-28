@@ -13,11 +13,17 @@ use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy)]
+/// 2D regularization operator used by inverse and proximal solvers.
 pub enum RegOperator2D<'a> {
+    /// Identity operator.
     Identity,
+    /// Discrete Laplacian penalty.
     Laplacian,
+    /// Forward-difference gradient penalty.
     Gradient,
+    /// Custom spatial kernel borrowed for the solver call.
     CustomKernel(&'a Kernel2D),
+    /// Custom transfer function borrowed for the solver call.
     CustomTransfer(&'a Transfer2D),
 }
 
@@ -48,11 +54,17 @@ impl RegOperator2D<'_> {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// 3D regularization operator used by volume solvers.
 pub enum RegOperator3D<'a> {
+    /// Identity operator.
     Identity,
+    /// Discrete Laplacian penalty.
     Laplacian,
+    /// Forward-difference gradient penalty.
     Gradient,
+    /// Custom spatial kernel borrowed for the solver call.
     CustomKernel(&'a Kernel3D),
+    /// Custom transfer function borrowed for the solver call.
     CustomTransfer(&'a Transfer3D),
 }
 

@@ -3,11 +3,17 @@ use crate::{Error, Result};
 use super::stopping::StopReason;
 
 #[derive(Debug, Clone, PartialEq)]
+/// Iteration diagnostics returned by iterative solvers.
 pub struct SolveReport {
+    /// Number of iterations completed.
     pub iterations: usize,
+    /// Condition that stopped the solver.
     pub stop_reason: StopReason,
+    /// Objective values recorded per iteration, empty when history collection is disabled.
     pub objective_history: Vec<f32>,
+    /// Residual norms recorded per iteration, empty when not collected by the solver.
     pub residual_history: Vec<f32>,
+    /// Estimated noise-to-signal ratio when an algorithm infers one.
     pub estimated_nsr: Option<f32>,
 }
 

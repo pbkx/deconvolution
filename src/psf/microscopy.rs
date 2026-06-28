@@ -1,3 +1,8 @@
+//! Microscopy PSF models for 3D deconvolution.
+//!
+//! Use parameter builders such as [`BornWolfParams`] and [`GibsonLanniParams`]
+//! to generate normalized `(depth, height, width)` PSFs.
+
 use std::f32::consts::PI;
 
 use ndarray::{Array2, Array3};
@@ -5,6 +10,10 @@ use ndarray::{Array2, Array3};
 use crate::{Error, Kernel2D, Kernel3D, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Parameters for a scalar Born-Wolf 3D microscopy PSF.
+///
+/// Dimensions use `(depth, height, width)` order. Optical distances are in
+/// micrometers.
 pub struct BornWolfParams {
     dims: (usize, usize, usize),
     wavelength_um: f32,
@@ -57,6 +66,10 @@ impl BornWolfParams {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Parameters for a Gibson-Lanni 3D microscopy PSF.
+///
+/// Dimensions use `(depth, height, width)` order. Wavelength, coverslip
+/// thickness, and axial step values are in micrometers.
 pub struct GibsonLanniParams {
     dims: (usize, usize, usize),
     wavelength_um: f32,
@@ -144,6 +157,10 @@ impl GibsonLanniParams {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Parameters for a Gibson-Lanni PSF with depth-varying refractive index.
+///
+/// The refractive index transitions from `refractive_index_start` to
+/// `refractive_index_end` across the axial dimension.
 pub struct VariableRiGibsonLanniParams {
     dims: (usize, usize, usize),
     wavelength_um: f32,
@@ -245,6 +262,10 @@ impl VariableRiGibsonLanniParams {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Parameters for a vectorial Richards-Wolf 3D microscopy PSF.
+///
+/// `polarization_weight` blends the vectorial polarization terms and should be
+/// in `[0, 1]`.
 pub struct RichardsWolfParams {
     dims: (usize, usize, usize),
     wavelength_um: f32,

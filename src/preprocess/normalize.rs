@@ -1,3 +1,8 @@
+//! Range normalization helpers for arrays.
+//!
+//! Use [`normalize_range`] to apply a [`crate::RangePolicy`] to an `(height,
+//! width)` image before or after restoration.
+
 use ndarray::{Array2, Array3};
 
 use crate::{Error, RangePolicy, Result};

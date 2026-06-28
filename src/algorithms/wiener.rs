@@ -16,6 +16,10 @@ use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Boundary, ChannelMode, Error, Padding, RangePolicy, Result, SolveReport, StopReason};
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for Wiener deconvolution with a known 2D PSF.
+///
+/// Defaults use scalar NSR `1e-2`, reflective boundaries, no FFT padding, and
+/// independent channel restoration.
 pub struct Wiener {
     nsr: f32,
     noise_autocorr: Option<Transfer2D>,
@@ -89,6 +93,9 @@ impl Wiener {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for iterative NSR estimation followed by Wiener restoration.
+///
+/// Use this when a scalar noise-to-signal ratio is not known ahead of time.
 pub struct UnsupervisedWiener {
     initial_nsr: f32,
     min_nsr: f32,
