@@ -39,6 +39,7 @@ impl Default for BlindReport {
 }
 
 impl BlindReport {
+    /// Create an empty blind-solver report.
     pub fn new() -> Self {
         Self::default()
     }

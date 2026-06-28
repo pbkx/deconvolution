@@ -9,6 +9,12 @@ use super::convert::{NdSample, array2_from_f32, array2_to_f32, kernel2_from_samp
 use crate::Result;
 use crate::blind::{BlindMaximumLikelihood, BlindOutput, BlindRichardsonLucy};
 
+/// Estimate a 2D ndarray and PSF with blind Richardson-Lucy.
+///
+/// # Errors
+///
+/// Returns an error when sample conversion fails, the input arrays are empty or
+/// non-finite, the initial PSF is invalid, or blind updates become non-finite.
 pub fn richardson_lucy<T: NdSample>(
     image: &Array2<T>,
     initial_psf: &Array2<T>,
@@ -16,6 +22,12 @@ pub fn richardson_lucy<T: NdSample>(
     richardson_lucy_with(image, initial_psf, &BlindRichardsonLucy::new())
 }
 
+/// Estimate a 2D ndarray and PSF with explicit blind Richardson-Lucy settings.
+///
+/// # Errors
+///
+/// Returns an error when sample conversion fails, the input arrays are empty or
+/// non-finite, the initial PSF is invalid, or `config` has invalid constraints.
 pub fn richardson_lucy_with<T: NdSample>(
     image: &Array2<T>,
     initial_psf: &Array2<T>,
@@ -26,6 +38,12 @@ pub fn richardson_lucy_with<T: NdSample>(
     })
 }
 
+/// Estimate a 2D ndarray and PSF with blind maximum likelihood.
+///
+/// # Errors
+///
+/// Returns an error when sample conversion fails, the input arrays are empty or
+/// non-finite, the initial PSF is invalid, or blind updates become non-finite.
 pub fn maximum_likelihood<T: NdSample>(
     image: &Array2<T>,
     initial_psf: &Array2<T>,
@@ -33,6 +51,12 @@ pub fn maximum_likelihood<T: NdSample>(
     maximum_likelihood_with(image, initial_psf, &BlindMaximumLikelihood::new())
 }
 
+/// Estimate a 2D ndarray and PSF with explicit blind ML settings.
+///
+/// # Errors
+///
+/// Returns an error when sample conversion fails, the input arrays are empty or
+/// non-finite, the initial PSF is invalid, or `config` has invalid constraints.
 pub fn maximum_likelihood_with<T: NdSample>(
     image: &Array2<T>,
     initial_psf: &Array2<T>,

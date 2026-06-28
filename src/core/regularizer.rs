@@ -28,6 +28,13 @@ pub enum RegOperator2D<'a> {
 }
 
 impl RegOperator2D<'_> {
+    /// Apply the regularization operator to an `(height, width)` image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] for non-finite samples and
+    /// [`Error::DimensionMismatch`] when a custom transfer shape differs from
+    /// `input`.
     pub fn apply(&self, input: &Array2<f32>) -> Result<Array2<f32>> {
         finite_real_2d(input)?;
 
@@ -40,6 +47,13 @@ impl RegOperator2D<'_> {
         }
     }
 
+    /// Apply the adjoint regularization operator to an `(height, width)` image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] for non-finite samples and
+    /// [`Error::DimensionMismatch`] when a custom transfer shape differs from
+    /// `input`.
     pub fn adjoint(&self, input: &Array2<f32>) -> Result<Array2<f32>> {
         finite_real_2d(input)?;
 
@@ -69,6 +83,13 @@ pub enum RegOperator3D<'a> {
 }
 
 impl RegOperator3D<'_> {
+    /// Apply the regularization operator to a `(depth, height, width)` volume.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] for non-finite samples and
+    /// [`Error::DimensionMismatch`] when a custom transfer shape differs from
+    /// `input`.
     pub fn apply(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
         finite_real_3d(input)?;
 
@@ -81,6 +102,13 @@ impl RegOperator3D<'_> {
         }
     }
 
+    /// Apply the adjoint regularization operator to a `(depth, height, width)` volume.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] for non-finite samples and
+    /// [`Error::DimensionMismatch`] when a custom transfer shape differs from
+    /// `input`.
     pub fn adjoint(&self, input: &Array3<f32>) -> Result<Array3<f32>> {
         finite_real_3d(input)?;
 

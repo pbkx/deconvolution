@@ -10,6 +10,15 @@ use rand_distr::{Distribution, Normal, Poisson};
 
 use crate::{Error, Result};
 
+/// Add zero-mean Gaussian noise to an `(height, width)` image.
+///
+/// `sigma` is the intensity standard deviation. `sigma == 0` returns a clone of
+/// the input.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, `sigma` is negative or
+/// non-finite, distribution construction fails, or a sampled value is non-finite.
 pub fn add_gaussian_noise(input: &Array2<f32>, sigma: f32, seed: u64) -> Result<Array2<f32>> {
     validate_input(input)?;
 
@@ -36,6 +45,15 @@ pub fn add_gaussian_noise(input: &Array2<f32>, sigma: f32, seed: u64) -> Result<
     Ok(output)
 }
 
+/// Add Poisson shot noise to a non-negative intensity model.
+///
+/// `peak` converts intensity `1.0` into expected photon counts. Negative input
+/// samples are clipped to `0.0` before sampling.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, `peak` is not positive
+/// and finite, distribution construction fails, or a sampled value is non-finite.
 pub fn add_poisson_noise(input: &Array2<f32>, peak: f32, seed: u64) -> Result<Array2<f32>> {
     validate_input(input)?;
 
@@ -66,6 +84,13 @@ pub fn add_poisson_noise(input: &Array2<f32>, peak: f32, seed: u64) -> Result<Ar
     Ok(output)
 }
 
+/// Add Gaussian readout noise to an `(height, width)` image.
+///
+/// This is an alias for [`add_gaussian_noise`] with detector-oriented naming.
+///
+/// # Errors
+///
+/// Returns the same errors as [`add_gaussian_noise`].
 pub fn add_readout_noise(input: &Array2<f32>, sigma: f32, seed: u64) -> Result<Array2<f32>> {
     add_gaussian_noise(input, sigma, seed)
 }

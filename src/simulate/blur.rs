@@ -17,6 +17,15 @@ use crate::psf::{Kernel2D, Kernel3D};
 use crate::simulate::noise::{add_gaussian_noise, add_poisson_noise, add_readout_noise};
 use crate::{Error, Result};
 
+/// Blur a 2D image with a spatial PSF using FFT convolution.
+///
+/// `input` uses `(height, width)` order. The PSF is converted to an OTF with
+/// the same dimensions as `input`.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, `psf` is invalid, PSF
+/// to OTF conversion fails, or the frequency-domain product is non-finite.
 pub fn blur(input: &Array2<f32>, psf: &Kernel2D) -> Result<Array2<f32>> {
     validate_input(input)?;
     validate(psf)?;
@@ -25,6 +34,14 @@ pub fn blur(input: &Array2<f32>, psf: &Kernel2D) -> Result<Array2<f32>> {
     blur_otf(input, &otf)
 }
 
+/// Blur a 2D image with a precomputed OTF.
+///
+/// `input.dim()` must match `otf.dims()`.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, dimensions do not
+/// match, `otf` contains non-finite values, or FFT processing fails.
 pub fn blur_otf(input: &Array2<f32>, otf: &Transfer2D) -> Result<Array2<f32>> {
     validate_input(input)?;
     if input.dim() != otf.dims() {
@@ -40,6 +57,15 @@ pub fn blur_otf(input: &Array2<f32>, otf: &Transfer2D) -> Result<Array2<f32>> {
     fft2_inverse_complex(&spectrum, &mut cache)
 }
 
+/// Blur a 3D volume with a spatial PSF using FFT convolution.
+///
+/// `input` uses `(depth, height, width)` order. The PSF is converted to an OTF
+/// with the same dimensions as `input`.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, `psf` is invalid, PSF
+/// to OTF conversion fails, or the frequency-domain product is non-finite.
 pub fn blur_3d(input: &Array3<f32>, psf: &Kernel3D) -> Result<Array3<f32>> {
     validate_input_3d(input)?;
     validate_3d(psf)?;
@@ -48,6 +74,14 @@ pub fn blur_3d(input: &Array3<f32>, psf: &Kernel3D) -> Result<Array3<f32>> {
     blur_otf_3d(input, &otf)
 }
 
+/// Blur a 3D volume with a precomputed OTF.
+///
+/// `input.dim()` must match `otf.dims()` in `(depth, height, width)` order.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, dimensions do not
+/// match, `otf` contains non-finite values, or FFT processing fails.
 pub fn blur_otf_3d(input: &Array3<f32>, otf: &Transfer3D) -> Result<Array3<f32>> {
     validate_input_3d(input)?;
     if input.dim() != otf.dims() {
@@ -63,6 +97,16 @@ pub fn blur_otf_3d(input: &Array3<f32>, otf: &Transfer3D) -> Result<Array3<f32>>
     fft3_inverse_complex(&spectrum, &mut cache)
 }
 
+/// Blur an image and add optional reproducible noise sources.
+///
+/// Gaussian and readout `sigma` values are additive intensity standard
+/// deviations. `poisson_peak` scales normalized intensity into photon counts.
+/// Each enabled noise source receives a deterministic seed derived from `seed`.
+///
+/// # Errors
+///
+/// Returns an error when the blur inputs are invalid, a noise parameter is
+/// invalid, or any generated degraded value is non-finite.
 pub fn degrade(
     input: &Array2<f32>,
     psf: &Kernel2D,

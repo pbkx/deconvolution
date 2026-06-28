@@ -11,10 +11,22 @@ use crate::optimization::{Cmle, Gmle, Qmle};
 use crate::spectral::Wiener;
 use crate::{Kernel3D, Result, SolveReport};
 
+/// Restore a `(depth, height, width)` volume with Wiener filtering.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// Wiener settings, or non-finite restored values.
 pub fn wiener(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<Array3<f32>> {
     wiener_with(volume, psf, &Wiener::new())
 }
 
+/// Restore a 3D volume with Wiener filtering and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// Wiener settings, or non-finite restored values.
 pub fn wiener_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -24,6 +36,12 @@ pub fn wiener_with(
     algorithms::wiener_array3_with(volume, &kernel, config)
 }
 
+/// Restore a 3D volume with Richardson-Lucy Poisson EM.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// EM settings, or non-finite iterative updates.
 pub fn richardson_lucy(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -31,6 +49,12 @@ pub fn richardson_lucy(
     richardson_lucy_with(volume, psf, &RichardsonLucy::new())
 }
 
+/// Restore a 3D volume with Richardson-Lucy and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// EM settings, or non-finite iterative updates.
 pub fn richardson_lucy_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -40,6 +64,12 @@ pub fn richardson_lucy_with(
     algorithms::richardson_lucy_array3_with(volume, &kernel, config)
 }
 
+/// Restore a 3D volume with Richardson-Lucy and total variation.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// TV/EM settings, or non-finite iterative updates.
 pub fn richardson_lucy_tv(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -47,6 +77,12 @@ pub fn richardson_lucy_tv(
     richardson_lucy_tv_with(volume, psf, &RichardsonLucyTv::new())
 }
 
+/// Restore a 3D volume with RL-TV and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// TV/EM settings, or non-finite iterative updates.
 pub fn richardson_lucy_tv_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -56,10 +92,22 @@ pub fn richardson_lucy_tv_with(
     algorithms::richardson_lucy_tv_array3_with(volume, &kernel, config)
 }
 
+/// Restore a 3D volume with classical maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn cmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
     cmle_with(volume, psf, &Cmle::new())
 }
 
+/// Restore a 3D volume with CMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn cmle_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -69,10 +117,22 @@ pub fn cmle_with(
     algorithms::cmle_array3_with(volume, &kernel, config)
 }
 
+/// Restore a 3D volume with Gaussian maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, roughness, TV, or EM settings, or non-finite updates.
 pub fn gmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
     gmle_with(volume, psf, &Gmle::new())
 }
 
+/// Restore a 3D volume with GMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, roughness, TV, or EM settings, or non-finite updates.
 pub fn gmle_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,
@@ -82,10 +142,22 @@ pub fn gmle_with(
     algorithms::gmle_array3_with(volume, &kernel, config)
 }
 
+/// Restore a 3D volume with quadratic maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn qmle(volume: &Array3<f32>, psf: &Array3<f32>) -> Result<(Array3<f32>, SolveReport)> {
     qmle_with(volume, psf, &Qmle::new())
 }
 
+/// Restore a 3D volume with QMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for empty or non-finite volumes, invalid 3D PSFs, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn qmle_with(
     volume: &Array3<f32>,
     psf: &Array3<f32>,

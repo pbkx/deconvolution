@@ -9,6 +9,14 @@ use ndarray::Array2;
 
 use crate::{Error, Result};
 
+/// Blend image borders toward their edge mean with a squared-sine window.
+///
+/// `input` uses `(height, width)` order. `border` is measured in pixels on each
+/// edge; values larger than half the smallest dimension are clamped.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or contains non-finite values.
 pub fn window_edges(input: &Array2<f32>, border: usize) -> Result<Array2<f32>> {
     validate_input(input)?;
 
@@ -42,6 +50,14 @@ pub fn window_edges(input: &Array2<f32>, border: usize) -> Result<Array2<f32>> {
     Ok(output)
 }
 
+/// Apply default edge apodization to an `(height, width)` image.
+///
+/// The border width is `min(height, width) / 16`, clamped to at least one pixel
+/// and at most half the smallest dimension.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or contains non-finite values.
 pub fn apodize(input: &Array2<f32>) -> Result<Array2<f32>> {
     validate_input(input)?;
 

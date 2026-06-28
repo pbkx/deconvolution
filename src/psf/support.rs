@@ -7,30 +7,56 @@ use ndarray::{Array2, Array3};
 
 use crate::{Error, Kernel2D, Kernel3D, Result};
 
+/// Return a copy of a 2D kernel normalized to sum `1`.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is non-finite or has zero effective sum.
 pub fn normalize(kernel: &Kernel2D) -> Result<Kernel2D> {
     let mut normalized = kernel.clone();
     normalized.normalize()?;
     Ok(normalized)
 }
 
+/// Return a copy of a 3D kernel normalized to sum `1`.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is non-finite or has zero effective sum.
 pub fn normalize_3d(kernel: &Kernel3D) -> Result<Kernel3D> {
     let mut normalized = kernel.clone();
     normalized.normalize()?;
     Ok(normalized)
 }
 
+/// Circularly shift a 2D kernel so its largest-magnitude sample is centered.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is invalid or index conversion overflows.
 pub fn center(kernel: &Kernel2D) -> Result<Kernel2D> {
     validate(kernel)?;
     let shifted = center_array_2d(kernel.as_array())?;
     Kernel2D::new(shifted)
 }
 
+/// Circularly shift a 3D kernel so its largest-magnitude sample is centered.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is invalid or index conversion overflows.
 pub fn center_3d(kernel: &Kernel3D) -> Result<Kernel3D> {
     validate_3d(kernel)?;
     let shifted = center_array_3d(kernel.as_array())?;
     Kernel3D::new(shifted)
 }
 
+/// Center-pad a 2D kernel to `(height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when the target dimensions are empty, smaller than the
+/// source kernel, or the source kernel is invalid.
 pub fn pad_to(kernel: &Kernel2D, dims: (usize, usize)) -> Result<Kernel2D> {
     validate(kernel)?;
     let (target_h, target_w) = dims;
@@ -56,6 +82,12 @@ pub fn pad_to(kernel: &Kernel2D, dims: (usize, usize)) -> Result<Kernel2D> {
     Kernel2D::new(padded)
 }
 
+/// Center-pad a 3D kernel to `(depth, height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when the target dimensions are empty, smaller than the
+/// source kernel, or the source kernel is invalid.
 pub fn pad_to_3d(kernel: &Kernel3D, dims: (usize, usize, usize)) -> Result<Kernel3D> {
     validate_3d(kernel)?;
     let (target_d, target_h, target_w) = dims;
@@ -84,6 +116,12 @@ pub fn pad_to_3d(kernel: &Kernel3D, dims: (usize, usize, usize)) -> Result<Kerne
     Kernel3D::new(padded)
 }
 
+/// Center-crop a 2D kernel to `(height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when the target dimensions are empty, larger than the
+/// source kernel, or the source kernel is invalid.
 pub fn crop_to(kernel: &Kernel2D, dims: (usize, usize)) -> Result<Kernel2D> {
     validate(kernel)?;
     let (target_h, target_w) = dims;
@@ -108,6 +146,12 @@ pub fn crop_to(kernel: &Kernel2D, dims: (usize, usize)) -> Result<Kernel2D> {
     Kernel2D::new(cropped)
 }
 
+/// Center-crop a 3D kernel to `(depth, height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when the target dimensions are empty, larger than the
+/// source kernel, or the source kernel is invalid.
 pub fn crop_to_3d(kernel: &Kernel3D, dims: (usize, usize, usize)) -> Result<Kernel3D> {
     validate_3d(kernel)?;
     let (target_d, target_h, target_w) = dims;
@@ -135,6 +179,11 @@ pub fn crop_to_3d(kernel: &Kernel3D, dims: (usize, usize, usize)) -> Result<Kern
     Kernel3D::new(cropped)
 }
 
+/// Reverse both axes of a 2D kernel.
+///
+/// # Errors
+///
+/// Returns an error when the source kernel is invalid.
 pub fn flip(kernel: &Kernel2D) -> Result<Kernel2D> {
     validate(kernel)?;
     let (height, width) = kernel.dims();
@@ -147,6 +196,11 @@ pub fn flip(kernel: &Kernel2D) -> Result<Kernel2D> {
     Kernel2D::new(flipped)
 }
 
+/// Reverse depth, height, and width axes of a 3D kernel.
+///
+/// # Errors
+///
+/// Returns an error when the source kernel is invalid.
 pub fn flip_3d(kernel: &Kernel3D) -> Result<Kernel3D> {
     validate_3d(kernel)?;
     let (depth, height, width) = kernel.dims();
@@ -162,6 +216,11 @@ pub fn flip_3d(kernel: &Kernel3D) -> Result<Kernel3D> {
     Kernel3D::new(flipped)
 }
 
+/// Validate that a 2D kernel is finite and has nonzero sum.
+///
+/// # Errors
+///
+/// Returns an error for non-finite samples or a zero effective sum.
 pub fn validate(kernel: &Kernel2D) -> Result<()> {
     if !kernel.is_finite() {
         return Err(Error::NonFiniteInput);
@@ -173,6 +232,11 @@ pub fn validate(kernel: &Kernel2D) -> Result<()> {
     Ok(())
 }
 
+/// Validate that a 3D kernel is finite and has nonzero sum.
+///
+/// # Errors
+///
+/// Returns an error for non-finite samples or a zero effective sum.
 pub fn validate_3d(kernel: &Kernel3D) -> Result<()> {
     if !kernel.is_finite() {
         return Err(Error::NonFiniteInput);
@@ -184,6 +248,14 @@ pub fn validate_3d(kernel: &Kernel3D) -> Result<()> {
     Ok(())
 }
 
+/// Build a 2D support mask from a fraction of maximum absolute value.
+///
+/// A sample is included when `abs(sample) >= max_abs * threshold`.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is invalid or `threshold` is negative or
+/// non-finite.
 pub fn support_mask(kernel: &Kernel2D, threshold: f32) -> Result<Array2<bool>> {
     validate(kernel)?;
     if !threshold.is_finite() || threshold < 0.0 {
@@ -204,6 +276,14 @@ pub fn support_mask(kernel: &Kernel2D, threshold: f32) -> Result<Array2<bool>> {
     Ok(mask)
 }
 
+/// Build a 3D support mask from a fraction of maximum absolute value.
+///
+/// A sample is included when `abs(sample) >= max_abs * threshold`.
+///
+/// # Errors
+///
+/// Returns an error when the kernel is invalid or `threshold` is negative or
+/// non-finite.
 pub fn support_mask_3d(kernel: &Kernel3D, threshold: f32) -> Result<Array3<bool>> {
     validate_3d(kernel)?;
     if !threshold.is_finite() || threshold < 0.0 {

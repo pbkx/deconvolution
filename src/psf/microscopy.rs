@@ -35,30 +35,36 @@ impl Default for BornWolfParams {
 }
 
 impl BornWolfParams {
+    /// Create Born-Wolf parameters with default dimensions and optical values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set output dimensions in `(depth, height, width)` order.
     pub fn dims(mut self, value: (usize, usize, usize)) -> Self {
         self.dims = value;
         self
     }
 
+    /// Set emission wavelength in micrometers.
     pub fn wavelength_um(mut self, value: f32) -> Self {
         self.wavelength_um = value;
         self
     }
 
+    /// Set the objective numerical aperture.
     pub fn numerical_aperture(mut self, value: f32) -> Self {
         self.numerical_aperture = value;
         self
     }
 
+    /// Set the sample refractive index.
     pub fn refractive_index(mut self, value: f32) -> Self {
         self.refractive_index = value;
         self
     }
 
+    /// Set axial sample spacing in micrometers per z slice.
     pub fn axial_step_um(mut self, value: f32) -> Self {
         self.axial_step_um = value;
         self
@@ -101,55 +107,66 @@ impl Default for GibsonLanniParams {
 }
 
 impl GibsonLanniParams {
+    /// Create Gibson-Lanni parameters with default dimensions and optical values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set output dimensions in `(depth, height, width)` order.
     pub fn dims(mut self, value: (usize, usize, usize)) -> Self {
         self.dims = value;
         self
     }
 
+    /// Set emission wavelength in micrometers.
     pub fn wavelength_um(mut self, value: f32) -> Self {
         self.wavelength_um = value;
         self
     }
 
+    /// Set the objective numerical aperture.
     pub fn numerical_aperture(mut self, value: f32) -> Self {
         self.numerical_aperture = value;
         self
     }
 
+    /// Set immersion medium refractive index.
     pub fn immersion_index(mut self, value: f32) -> Self {
         self.immersion_index = value;
         self
     }
 
+    /// Set specimen refractive index.
     pub fn specimen_index(mut self, value: f32) -> Self {
         self.specimen_index = value;
         self
     }
 
+    /// Set actual coverslip refractive index.
     pub fn coverslip_index(mut self, value: f32) -> Self {
         self.coverslip_index = value;
         self
     }
 
+    /// Set design coverslip refractive index.
     pub fn design_coverslip_index(mut self, value: f32) -> Self {
         self.design_coverslip_index = value;
         self
     }
 
+    /// Set actual coverslip thickness in micrometers.
     pub fn coverslip_thickness_um(mut self, value: f32) -> Self {
         self.coverslip_thickness_um = value;
         self
     }
 
+    /// Set design coverslip thickness in micrometers.
     pub fn design_coverslip_thickness_um(mut self, value: f32) -> Self {
         self.design_coverslip_thickness_um = value;
         self
     }
 
+    /// Set axial sample spacing in micrometers per z slice.
     pub fn axial_step_um(mut self, value: f32) -> Self {
         self.axial_step_um = value;
         self
@@ -196,65 +213,78 @@ impl Default for VariableRiGibsonLanniParams {
 }
 
 impl VariableRiGibsonLanniParams {
+    /// Create variable-RI Gibson-Lanni parameters with default values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set output dimensions in `(depth, height, width)` order.
     pub fn dims(mut self, value: (usize, usize, usize)) -> Self {
         self.dims = value;
         self
     }
 
+    /// Set emission wavelength in micrometers.
     pub fn wavelength_um(mut self, value: f32) -> Self {
         self.wavelength_um = value;
         self
     }
 
+    /// Set the objective numerical aperture.
     pub fn numerical_aperture(mut self, value: f32) -> Self {
         self.numerical_aperture = value;
         self
     }
 
+    /// Set immersion medium refractive index.
     pub fn immersion_index(mut self, value: f32) -> Self {
         self.immersion_index = value;
         self
     }
 
+    /// Set the refractive index at the first z slice.
     pub fn refractive_index_start(mut self, value: f32) -> Self {
         self.refractive_index_start = value;
         self
     }
 
+    /// Set the refractive index at the last z slice.
     pub fn refractive_index_end(mut self, value: f32) -> Self {
         self.refractive_index_end = value;
         self
     }
 
+    /// Set the exponent used to interpolate the axial refractive-index profile.
     pub fn profile_exponent(mut self, value: f32) -> Self {
         self.profile_exponent = value;
         self
     }
 
+    /// Set actual coverslip refractive index.
     pub fn coverslip_index(mut self, value: f32) -> Self {
         self.coverslip_index = value;
         self
     }
 
+    /// Set design coverslip refractive index.
     pub fn design_coverslip_index(mut self, value: f32) -> Self {
         self.design_coverslip_index = value;
         self
     }
 
+    /// Set actual coverslip thickness in micrometers.
     pub fn coverslip_thickness_um(mut self, value: f32) -> Self {
         self.coverslip_thickness_um = value;
         self
     }
 
+    /// Set design coverslip thickness in micrometers.
     pub fn design_coverslip_thickness_um(mut self, value: f32) -> Self {
         self.design_coverslip_thickness_um = value;
         self
     }
 
+    /// Set axial sample spacing in micrometers per z slice.
     pub fn axial_step_um(mut self, value: f32) -> Self {
         self.axial_step_um = value;
         self
@@ -291,46 +321,63 @@ impl Default for RichardsWolfParams {
 }
 
 impl RichardsWolfParams {
+    /// Create Richards-Wolf parameters with default dimensions and optical values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set output dimensions in `(depth, height, width)` order.
     pub fn dims(mut self, value: (usize, usize, usize)) -> Self {
         self.dims = value;
         self
     }
 
+    /// Set emission wavelength in micrometers.
     pub fn wavelength_um(mut self, value: f32) -> Self {
         self.wavelength_um = value;
         self
     }
 
+    /// Set the objective numerical aperture.
     pub fn numerical_aperture(mut self, value: f32) -> Self {
         self.numerical_aperture = value;
         self
     }
 
+    /// Set immersion medium refractive index.
     pub fn immersion_index(mut self, value: f32) -> Self {
         self.immersion_index = value;
         self
     }
 
+    /// Set specimen refractive index.
     pub fn specimen_index(mut self, value: f32) -> Self {
         self.specimen_index = value;
         self
     }
 
+    /// Set vectorial polarization blend weight in `[0, 1]`.
     pub fn polarization_weight(mut self, value: f32) -> Self {
         self.polarization_weight = value;
         self
     }
 
+    /// Set axial sample spacing in micrometers per z slice.
     pub fn axial_step_um(mut self, value: f32) -> Self {
         self.axial_step_um = value;
         self
     }
 }
 
+/// Generate a normalized scalar Born-Wolf 3D PSF.
+///
+/// The output dimensions are `params.dims` in `(depth, height, width)` order.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, optical parameters are not
+/// positive and finite, numerical aperture is not below refractive index, or
+/// generated kernel values are invalid.
 pub fn born_wolf(params: &BornWolfParams) -> Result<Kernel3D> {
     validate_born_wolf_params(params)?;
     let (depth, height, width) = params.dims;
@@ -367,6 +414,16 @@ pub fn born_wolf(params: &BornWolfParams) -> Result<Kernel3D> {
     to_normalized_kernel(psf)
 }
 
+/// Generate a normalized Gibson-Lanni 3D PSF.
+///
+/// Coverslip and refractive-index mismatches modulate the axial spread and
+/// apodization. Dimensions use `(depth, height, width)` order.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, optical parameters are not
+/// positive and finite, numerical aperture exceeds the refractive-index limit,
+/// or generated kernel values are invalid.
 pub fn gibson_lanni(params: &GibsonLanniParams) -> Result<Kernel3D> {
     validate_gibson_lanni_params(params)?;
     let (depth, height, width) = params.dims;
@@ -418,6 +475,16 @@ pub fn gibson_lanni(params: &GibsonLanniParams) -> Result<Kernel3D> {
     to_normalized_kernel(psf)
 }
 
+/// Generate a normalized Gibson-Lanni 3D PSF with depth-varying refractive index.
+///
+/// The local refractive index is interpolated across z using
+/// `profile_exponent`. Dimensions use `(depth, height, width)` order.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, optical parameters are not
+/// positive and finite, numerical aperture exceeds the refractive-index limit,
+/// or generated kernel values are invalid.
 pub fn variable_ri_gibson_lanni(params: &VariableRiGibsonLanniParams) -> Result<Kernel3D> {
     validate_variable_ri_gibson_lanni_params(params)?;
     let (depth, height, width) = params.dims;
@@ -476,6 +543,16 @@ pub fn variable_ri_gibson_lanni(params: &VariableRiGibsonLanniParams) -> Result<
     to_normalized_kernel(psf)
 }
 
+/// Generate a normalized vectorial Richards-Wolf 3D PSF.
+///
+/// `polarization_weight` blends scalar-like and vectorial polarization terms.
+/// Dimensions use `(depth, height, width)` order.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, optical parameters are not
+/// positive and finite, `polarization_weight` is outside `[0, 1]`, numerical
+/// aperture exceeds the refractive-index limit, or generated values are invalid.
 pub fn richards_wolf(params: &RichardsWolfParams) -> Result<Kernel3D> {
     validate_richards_wolf_params(params)?;
     let (depth, height, width) = params.dims;
@@ -520,6 +597,14 @@ pub fn richards_wolf(params: &RichardsWolfParams) -> Result<Kernel3D> {
     to_normalized_kernel(psf)
 }
 
+/// Generate a normalized 2D Lorentzian PSF.
+///
+/// `dims` is `(height, width)` and `gamma` is the width parameter in pixels.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `gamma` is not positive and
+/// finite, or generated values cannot be normalized.
 pub fn lorentz2d(dims: (usize, usize), gamma: f32) -> Result<Kernel2D> {
     validate_dims_2d(dims)?;
     validate_positive(gamma)?;
@@ -549,6 +634,15 @@ pub fn lorentz2d(dims: (usize, usize), gamma: f32) -> Result<Kernel2D> {
     to_normalized_kernel2d(psf)
 }
 
+/// Generate a normalized rotated astigmatic Gaussian PSF.
+///
+/// `sigma_major` and `sigma_minor` are measured in pixels. `angle_deg` rotates
+/// the major axis in degrees.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, sigmas are not positive and
+/// finite, `angle_deg` is non-finite, or generated values cannot be normalized.
 pub fn astigmatic(
     dims: (usize, usize),
     sigma_major: f32,
@@ -593,6 +687,16 @@ pub fn astigmatic(
     to_normalized_kernel2d(psf)
 }
 
+/// Generate a normalized double-helix 2D PSF.
+///
+/// `sigma` and `lobe_separation` are measured in pixels. `angle_deg` rotates
+/// the lobe axis in degrees.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `sigma` or `lobe_separation` is
+/// not positive and finite, `angle_deg` is non-finite, or generated values
+/// cannot be normalized.
 pub fn double_helix(
     dims: (usize, usize),
     sigma: f32,

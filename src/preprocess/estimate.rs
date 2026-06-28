@@ -9,6 +9,15 @@ use ndarray::array;
 use crate::preprocess::padding::convolve_same_2d;
 use crate::{Boundary, Error, Result};
 
+/// Estimate a scalar noise-to-signal ratio from an `(height, width)` image.
+///
+/// The estimate treats a reflected-boundary 3x3 mean filter as the signal and
+/// uses the residual as noise. The returned ratio is always positive.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty, contains non-finite values,
+/// convolution fails, or the estimated powers are non-finite.
 pub fn estimate_nsr(input: &Array2<f32>) -> Result<f32> {
     validate_input(input)?;
 

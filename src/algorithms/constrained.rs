@@ -37,35 +37,46 @@ impl Default for Nnls {
 }
 
 impl Nnls {
+    /// Create an NNLS config with default iteration and output settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum projected-gradient iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the projected-gradient step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -103,45 +114,58 @@ impl Default for Bvls {
 }
 
 impl Bvls {
+    /// Create a BVLS config with default bounds `[0, 255]`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum projected-gradient iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the projected-gradient step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the inclusive lower bound for restored samples.
     pub fn lower_bound(mut self, value: f32) -> Self {
         self.lower_bound = value;
         self
     }
 
+    /// Set the inclusive upper bound for restored samples.
     pub fn upper_bound(mut self, value: f32) -> Self {
         self.upper_bound = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -164,10 +188,22 @@ struct ConstrainedConfig {
     collect_history: bool,
 }
 
+/// Restore an image with non-negative least squares and default settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent operator norm estimation.
 pub fn nnls(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     nnls_with(image, psf, &Nnls::new())
 }
 
+/// Restore an image with non-negative least squares and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent operator norm estimation.
 pub fn nnls_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -208,10 +244,22 @@ pub(crate) fn nnls_array2_with(
     )
 }
 
+/// Restore an image with bounded-variable least squares and default settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// bounds or solver parameters, or non-convergent operator norm estimation.
 pub fn bvls(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     bvls_with(image, psf, &Bvls::new())
 }
 
+/// Restore an image with bounded-variable least squares and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// bounds or solver parameters, or non-convergent operator norm estimation.
 pub fn bvls_with(
     image: &DynamicImage,
     psf: &Kernel2D,

@@ -12,6 +12,17 @@ use crate::{Error, Result};
 
 use super::Transfer2D;
 
+/// Generate a circular incoherent Koehler OTF.
+///
+/// `dims` is `(height, width)`. `cutoff_frequency` is expressed in normalized
+/// frequency units, where `1.0` reaches the Nyquist-radius edge used by this
+/// generator.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `cutoff_frequency` is not
+/// positive and finite, index conversion overflows, or generated values are
+/// non-finite.
 pub fn koehler_otf(dims: (usize, usize), cutoff_frequency: f32) -> Result<Transfer2D> {
     validate_dims_2d(dims)?;
     validate_cutoff(cutoff_frequency)?;
@@ -32,6 +43,16 @@ pub fn koehler_otf(dims: (usize, usize), cutoff_frequency: f32) -> Result<Transf
     Transfer2D::new(spectrum)
 }
 
+/// Generate a circular incoherent OTF with defocus attenuation.
+///
+/// `dims` is `(height, width)`. `defocus_strength` must be non-negative; larger
+/// values add a stronger cosine phase term and radial attenuation.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `cutoff_frequency` is not
+/// positive and finite, `defocus_strength` is negative or non-finite, index
+/// conversion overflows, or generated values are non-finite.
 pub fn defocus_otf(
     dims: (usize, usize),
     cutoff_frequency: f32,

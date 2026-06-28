@@ -37,35 +37,46 @@ impl Default for Mrnsd {
 }
 
 impl Mrnsd {
+    /// Create an MRNSD config with default iteration and output settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size.
+    ///
+    /// `None` uses the method default.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -99,40 +110,52 @@ impl Default for Cgls {
 }
 
 impl Cgls {
+    /// Create a CGLS config with default iteration and output settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size multiplier.
+    ///
+    /// `None` uses the method default.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -168,45 +191,58 @@ impl Default for Wpl {
 }
 
 impl Wpl {
+    /// Create a WPL config with default Poisson preconditioning settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size multiplier.
+    ///
+    /// `None` uses the method default.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the positive floor added to the WPL preconditioner.
     pub fn precondition_epsilon(mut self, value: f32) -> Self {
         self.precondition_epsilon = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -242,45 +278,58 @@ impl Default for Hybr {
 }
 
 impl Hybr {
+    /// Create a HyBR config with default Tikhonov damping.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size multiplier.
+    ///
+    /// `None` uses the method default.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the nonnegative Tikhonov weight.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -313,10 +362,22 @@ struct KrylovConfig {
     collect_history: bool,
 }
 
+/// Restore an image with modified residual norm steepest descent.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-finite iterative updates.
 pub fn mrnsd(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     mrnsd_with(image, psf, &Mrnsd::new())
 }
 
+/// Restore an image with MRNSD and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-finite iterative updates.
 pub fn mrnsd_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -357,10 +418,22 @@ pub(crate) fn mrnsd_array2_with(
     )
 }
 
+/// Restore an image with conjugate-gradient least squares.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-finite Krylov updates.
 pub fn cgls(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     cgls_with(image, psf, &Cgls::new())
 }
 
+/// Restore an image with CGLS and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-finite Krylov updates.
 pub fn cgls_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -405,10 +478,22 @@ pub(crate) fn cgls_array2_with(
     )
 }
 
+/// Restore an image with weighted Poisson likelihood iteration.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// preconditioner or solver parameters, or non-finite iterative updates.
 pub fn wpl(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     wpl_with(image, psf, &Wpl::new())
 }
 
+/// Restore an image with WPL and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// preconditioner or solver parameters, or non-finite iterative updates.
 pub fn wpl_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -455,10 +540,22 @@ pub(crate) fn wpl_array2_with(
     )
 }
 
+/// Restore an image with hybrid Krylov iteration and Tikhonov damping.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// Tikhonov or solver parameters, or non-finite Krylov updates.
 pub fn hybr(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     hybr_with(image, psf, &Hybr::new())
 }
 
+/// Restore an image with HyBR and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// Tikhonov or solver parameters, or non-finite Krylov updates.
 pub fn hybr_with(
     image: &DynamicImage,
     psf: &Kernel2D,

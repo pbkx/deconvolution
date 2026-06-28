@@ -12,6 +12,16 @@ use crate::psf::Kernel2D;
 use crate::psf::support::{normalize, validate};
 use crate::{Boundary, Error, Result};
 
+/// Blend image borders with a periodically blurred version of the image.
+///
+/// `input` uses `(height, width)` order. The taper radius is derived from the
+/// PSF half-size, and the PSF is normalized before convolution.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or non-finite, `psf` is invalid, the
+/// PSF is larger than the image, convolution fails, or the tapered output
+/// contains non-finite values.
 pub fn edgetaper(input: &Array2<f32>, psf: &Kernel2D) -> Result<Array2<f32>> {
     validate_input(input)?;
     validate(psf)?;

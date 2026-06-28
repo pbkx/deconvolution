@@ -13,6 +13,15 @@ use crate::otf::{Transfer2D, Transfer3D};
 use crate::psf::{Kernel2D, Kernel3D};
 use crate::{Error, Result};
 
+/// Convert a 2D spatial PSF into an OTF with `(height, width)` dimensions.
+///
+/// The PSF is zero-padded, circularly shifted by `-(psf_dims / 2)`, then
+/// transformed with a forward FFT.
+///
+/// # Errors
+///
+/// Returns an error when output dimensions are empty, smaller than the PSF,
+/// index conversion overflows, or the transfer contains non-finite values.
 pub fn psf2otf(psf: &Kernel2D, out_dims: (usize, usize)) -> Result<Transfer2D> {
     let (out_h, out_w) = out_dims;
     if out_h == 0 || out_w == 0 {
@@ -40,6 +49,15 @@ pub fn psf2otf(psf: &Kernel2D, out_dims: (usize, usize)) -> Result<Transfer2D> {
     Transfer2D::new(spectrum)
 }
 
+/// Convert a 3D spatial PSF into an OTF with `(depth, height, width)` dimensions.
+///
+/// The PSF is zero-padded, circularly shifted by `-(psf_dims / 2)`, then
+/// transformed with a forward FFT.
+///
+/// # Errors
+///
+/// Returns an error when output dimensions are empty, smaller than the PSF,
+/// index conversion overflows, or the transfer contains non-finite values.
 pub fn psf2otf_3d(psf: &Kernel3D, out_dims: (usize, usize, usize)) -> Result<Transfer3D> {
     let (out_d, out_h, out_w) = out_dims;
     if out_d == 0 || out_h == 0 || out_w == 0 {
@@ -70,6 +88,15 @@ pub fn psf2otf_3d(psf: &Kernel3D, out_dims: (usize, usize, usize)) -> Result<Tra
     Transfer3D::new(spectrum)
 }
 
+/// Convert a 2D OTF back into a spatial PSF crop.
+///
+/// `psf_dims` is `(height, width)`. The inverse FFT result is circularly shifted
+/// by `psf_dims / 2` before cropping.
+///
+/// # Errors
+///
+/// Returns an error when `psf_dims` is empty, larger than the OTF, index
+/// conversion overflows, or the spatial kernel contains non-finite values.
 pub fn otf2psf(otf: &Transfer2D, psf_dims: (usize, usize)) -> Result<Kernel2D> {
     let (psf_h, psf_w) = psf_dims;
     if psf_h == 0 || psf_w == 0 {
@@ -93,6 +120,15 @@ pub fn otf2psf(otf: &Transfer2D, psf_dims: (usize, usize)) -> Result<Kernel2D> {
     Kernel2D::new(cropped)
 }
 
+/// Convert a 3D OTF back into a spatial PSF crop.
+///
+/// `psf_dims` is `(depth, height, width)`. The inverse FFT result is circularly
+/// shifted by `psf_dims / 2` before cropping.
+///
+/// # Errors
+///
+/// Returns an error when `psf_dims` is empty, larger than the OTF, index
+/// conversion overflows, or the spatial kernel contains non-finite values.
 pub fn otf2psf_3d(otf: &Transfer3D, psf_dims: (usize, usize, usize)) -> Result<Kernel3D> {
     let (psf_d, psf_h, psf_w) = psf_dims;
     if psf_d == 0 || psf_h == 0 || psf_w == 0 {

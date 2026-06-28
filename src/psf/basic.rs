@@ -7,6 +7,13 @@ use ndarray::{Array2, Array3};
 
 use crate::{Error, Kernel2D, Kernel3D, Result};
 
+/// Build a 2D impulse PSF with one sample at the center.
+///
+/// `dims` is `(height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when either dimension is `0`.
 pub fn delta2d(dims: (usize, usize)) -> Result<Kernel2D> {
     let (height, width) = dims;
     if height == 0 || width == 0 {
@@ -18,6 +25,13 @@ pub fn delta2d(dims: (usize, usize)) -> Result<Kernel2D> {
     Kernel2D::new(kernel)
 }
 
+/// Build a 3D impulse PSF with one sample at the center.
+///
+/// `dims` is `(depth, height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when any dimension is `0`.
 pub fn delta3d(dims: (usize, usize, usize)) -> Result<Kernel3D> {
     let (depth, height, width) = dims;
     if depth == 0 || height == 0 || width == 0 {
@@ -29,6 +43,14 @@ pub fn delta3d(dims: (usize, usize, usize)) -> Result<Kernel3D> {
     Kernel3D::new(kernel)
 }
 
+/// Build a normalized 2D Gaussian PSF.
+///
+/// `dims` is `(height, width)` and `sigma` is in pixels.
+///
+/// # Errors
+///
+/// Returns an error for empty dimensions, non-positive or non-finite `sigma`,
+/// non-finite samples, or a kernel that cannot be normalized.
 pub fn gaussian2d(dims: (usize, usize), sigma: f32) -> Result<Kernel2D> {
     let (height, width) = dims;
     validate_dims_2d(height, width)?;
@@ -55,6 +77,14 @@ pub fn gaussian2d(dims: (usize, usize), sigma: f32) -> Result<Kernel2D> {
     normalize_kernel2d(kernel)
 }
 
+/// Build a normalized 3D Gaussian PSF.
+///
+/// `dims` is `(depth, height, width)` and `sigma` is in pixels.
+///
+/// # Errors
+///
+/// Returns an error for empty dimensions, non-positive or non-finite `sigma`,
+/// non-finite samples, or a kernel that cannot be normalized.
 pub fn gaussian3d(dims: (usize, usize, usize), sigma: f32) -> Result<Kernel3D> {
     let (depth, height, width) = dims;
     validate_dims_3d(depth, height, width)?;
@@ -85,6 +115,15 @@ pub fn gaussian3d(dims: (usize, usize, usize), sigma: f32) -> Result<Kernel3D> {
     normalize_kernel3d(kernel)
 }
 
+/// Build a normalized linear-motion PSF.
+///
+/// `length` is in pixels and `angle_deg` is measured counterclockwise in degrees.
+/// The output side length is the next odd size that can contain the line.
+///
+/// # Errors
+///
+/// Returns an error for non-positive length, non-finite parameters, non-finite
+/// samples, or a kernel that cannot be normalized.
 pub fn motion_linear(length: f32, angle_deg: f32) -> Result<Kernel2D> {
     if !length.is_finite() || length <= 0.0 {
         return Err(Error::InvalidParameter);
@@ -125,15 +164,39 @@ pub fn motion_linear(length: f32, angle_deg: f32) -> Result<Kernel2D> {
     normalize_kernel2d(kernel)
 }
 
+/// Build a normalized circular disk PSF.
+///
+/// `radius` is in pixels.
+///
+/// # Errors
+///
+/// Returns an error for non-positive or non-finite `radius`, non-finite samples,
+/// or a kernel that cannot be normalized.
 pub fn disk(radius: f32) -> Result<Kernel2D> {
     pillbox(radius)
 }
 
+/// Build a normalized binary pillbox PSF.
+///
+/// `radius` is in pixels and the output side length is odd.
+///
+/// # Errors
+///
+/// Returns an error for non-positive or non-finite `radius`, non-finite samples,
+/// or a kernel that cannot be normalized.
 pub fn pillbox(radius: f32) -> Result<Kernel2D> {
     let kernel = binary_disk(radius)?;
     normalize_kernel2d(kernel)
 }
 
+/// Build a normalized antialiased defocus disk PSF.
+///
+/// `radius` is in pixels and each output pixel is sampled on an `8 x 8` grid.
+///
+/// # Errors
+///
+/// Returns an error for non-positive or non-finite `radius`, non-finite samples,
+/// or a kernel that cannot be normalized.
 pub fn defocus(radius: f32) -> Result<Kernel2D> {
     validate_radius(radius)?;
     let side = odd_size_from_radius(radius)?;
@@ -167,6 +230,13 @@ pub fn defocus(radius: f32) -> Result<Kernel2D> {
     normalize_kernel2d(kernel)
 }
 
+/// Build a normalized 2D box PSF.
+///
+/// `dims` is `(height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when either dimension is `0`.
 pub fn box2d(dims: (usize, usize)) -> Result<Kernel2D> {
     let (height, width) = dims;
     validate_dims_2d(height, width)?;
@@ -174,6 +244,13 @@ pub fn box2d(dims: (usize, usize)) -> Result<Kernel2D> {
     normalize_kernel2d(kernel)
 }
 
+/// Build a normalized 3D box PSF.
+///
+/// `dims` is `(depth, height, width)`.
+///
+/// # Errors
+///
+/// Returns an error when any dimension is `0`.
 pub fn box3d(dims: (usize, usize, usize)) -> Result<Kernel3D> {
     let (depth, height, width) = dims;
     validate_dims_3d(depth, height, width)?;
@@ -181,6 +258,15 @@ pub fn box3d(dims: (usize, usize, usize)) -> Result<Kernel3D> {
     normalize_kernel3d(kernel)
 }
 
+/// Build a normalized anisotropic Gaussian PSF.
+///
+/// `dims` is `(height, width)`, sigmas are in pixels, and `angle_deg` is the
+/// major-axis angle in degrees.
+///
+/// # Errors
+///
+/// Returns an error for empty dimensions, non-positive or non-finite sigmas,
+/// non-finite angles, non-finite samples, or a kernel that cannot be normalized.
 pub fn oriented_gaussian(
     dims: (usize, usize),
     sigma_major: f32,

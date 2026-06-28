@@ -17,9 +17,18 @@ mod sealed {
 /// crates cannot add sample types with different finite-value behavior.
 pub trait NdSample: Copy + sealed::Sealed {
     /// Convert a sample into the crate's `f32` compute path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] when the sample is `NaN` or infinite.
     fn to_f32(self) -> Result<f32>;
 
     /// Convert a finite `f32` solver output back into the sample type.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NonFiniteInput`] when `value` is `NaN`, infinite, or
+    /// cannot be represented as a finite sample.
     fn from_f32(value: f32) -> Result<Self>;
 }
 

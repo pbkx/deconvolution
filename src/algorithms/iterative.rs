@@ -40,40 +40,52 @@ impl Default for Landweber {
 }
 
 impl Landweber {
+    /// Create a Landweber config with default iteration and output settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -107,40 +119,52 @@ impl Default for VanCittert {
 }
 
 impl VanCittert {
+    /// Create a Van Cittert config with default iteration and output settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -176,45 +200,58 @@ impl Default for TikhonovMiller {
 }
 
 impl TikhonovMiller {
+    /// Create a Tikhonov-Miller config with default damping.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size.
+    ///
+    /// `None` estimates a stable value from the regularized system.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the nonnegative Tikhonov weight.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -248,40 +285,52 @@ impl Default for Ictm {
 }
 
 impl Ictm {
+    /// Create an ICTM config with default constrained Tikhonov settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed step size.
+    ///
+    /// `None` estimates a stable value from the regularized system.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the nonnegative Tikhonov weight.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -306,10 +355,22 @@ struct IterativeConfig {
     collect_history: bool,
 }
 
+/// Restore an image with Landweber least-squares iteration.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent step-size estimation.
 pub fn landweber(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     landweber_with(image, psf, &Landweber::new())
 }
 
+/// Restore an image with Landweber iteration and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent step-size estimation.
 pub fn landweber_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -352,10 +413,22 @@ pub(crate) fn landweber_array2_with(
     )
 }
 
+/// Restore an image with Van Cittert fixed-point iteration.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent step-size estimation.
 pub fn van_cittert(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     van_cittert_with(image, psf, &VanCittert::new())
 }
 
+/// Restore an image with Van Cittert iteration and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// solver parameters, or non-convergent step-size estimation.
 pub fn van_cittert_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -398,6 +471,12 @@ pub(crate) fn van_cittert_array2_with(
     )
 }
 
+/// Restore an image with Tikhonov-Miller iteration.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization or solver parameters, or non-convergent step-size estimation.
 pub fn tikhonov_miller(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -405,6 +484,12 @@ pub fn tikhonov_miller(
     tikhonov_miller_with(image, psf, &TikhonovMiller::new())
 }
 
+/// Restore an image with Tikhonov-Miller iteration and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization or solver parameters, or non-convergent step-size estimation.
 pub fn tikhonov_miller_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -453,10 +538,22 @@ pub(crate) fn tikhonov_miller_array2_with(
     )
 }
 
+/// Restore an image with iterative constrained Tikhonov-Miller deconvolution.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization or solver parameters, or non-convergent step-size estimation.
 pub fn ictm(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     ictm_with(image, psf, &Ictm::new())
 }
 
+/// Restore an image with ICTM and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization or solver parameters, or non-convergent step-size estimation.
 pub fn ictm_with(
     image: &DynamicImage,
     psf: &Kernel2D,

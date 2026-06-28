@@ -7,6 +7,15 @@ use ndarray::{Array2, Array3};
 
 use crate::{Error, RangePolicy, Result};
 
+/// Apply a [`RangePolicy`] to an `(height, width)` image.
+///
+/// `PreserveInput` and `Unbounded` clone the input without rescaling. Clamp
+/// policies clip values to their documented range.
+///
+/// # Errors
+///
+/// Returns an error when `input` is empty or contains non-finite values, or when
+/// the normalized output contains non-finite values.
 pub fn normalize_range(input: &Array2<f32>, policy: RangePolicy) -> Result<Array2<f32>> {
     validate_input(input)?;
 

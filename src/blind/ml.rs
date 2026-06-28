@@ -32,30 +32,40 @@ impl Default for BlindMaximumLikelihood {
 }
 
 impl BlindMaximumLikelihood {
+    /// Create a blind ML config with nonnegative normalized PSF constraints.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum alternating image/PSF iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Replace the PSF constraints applied after each PSF update.
     pub fn psf_constraints(mut self, value: Vec<PsfConstraint>) -> Self {
         self.psf_constraints = value;
         self
     }
 
+    /// Add a 2D support mask before normalization.
+    ///
+    /// The mask shape must match the PSF shape used by the solver.
     pub fn support_mask(mut self, mask: Array2<bool>) -> Self {
         if let Some(index) = self
             .psf_constraints
@@ -70,12 +80,19 @@ impl BlindMaximumLikelihood {
         self
     }
 
+    /// Enable or disable objective and update histories in [`super::BlindReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
     }
 }
 
+/// Estimate both a restored image and PSF with blind maximum likelihood.
+///
+/// # Errors
+///
+/// Returns an error for invalid image data, invalid initial PSFs, invalid
+/// constraints or support masks, invalid solver parameters, or non-finite updates.
 pub fn maximum_likelihood(
     image: &DynamicImage,
     initial_psf: &Kernel2D,
@@ -83,6 +100,12 @@ pub fn maximum_likelihood(
     maximum_likelihood_with(image, initial_psf, &BlindMaximumLikelihood::new())
 }
 
+/// Estimate both a restored image and PSF with explicit blind ML settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid image data, invalid initial PSFs, invalid
+/// constraints or support masks, invalid solver parameters, or non-finite updates.
 pub fn maximum_likelihood_with(
     image: &DynamicImage,
     initial_psf: &Kernel2D,

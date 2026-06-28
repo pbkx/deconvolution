@@ -47,45 +47,60 @@ impl Default for Wiener {
 }
 
 impl Wiener {
+    /// Create a Wiener config with scalar NSR `1e-2`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the scalar noise-to-signal ratio.
     pub fn nsr(mut self, value: f32) -> Self {
         self.nsr = value;
         self
     }
 
+    /// Set the noise autocorrelation transfer.
+    ///
+    /// When this is set, [`Self::image_autocorr`] must also be set with the same
+    /// dimensions.
     pub fn noise_autocorr(mut self, value: Transfer2D) -> Self {
         self.noise_autocorr = Some(value);
         self
     }
 
+    /// Set the image autocorrelation transfer.
+    ///
+    /// When this is set, [`Self::noise_autocorr`] must also be set with the same
+    /// dimensions.
     pub fn image_autocorr(mut self, value: Transfer2D) -> Self {
         self.image_autocorr = Some(value);
         self
     }
 
+    /// Set the boundary extension used while padding.
     pub fn boundary(mut self, value: Boundary) -> Self {
         self.boundary = value;
         self
     }
 
+    /// Set the FFT padding policy.
     pub fn padding(mut self, value: Padding) -> Self {
         self.padding = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable diagnostic history collection.
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -127,65 +142,88 @@ impl Default for UnsupervisedWiener {
 }
 
 impl UnsupervisedWiener {
+    /// Create an unsupervised Wiener config with default NSR search settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the starting noise-to-signal ratio estimate.
     pub fn initial_nsr(mut self, value: f32) -> Self {
         self.initial_nsr = value;
         self
     }
 
+    /// Set the minimum positive noise-to-signal ratio.
     pub fn min_nsr(mut self, value: f32) -> Self {
         self.min_nsr = value;
         self
     }
 
+    /// Set the maximum number of NSR estimation iterations.
     pub fn max_iterations(mut self, value: usize) -> Self {
         self.max_iterations = value;
         self
     }
 
+    /// Set the minimum NSR iterations before tolerance can stop the loop.
     pub fn min_iterations(mut self, value: usize) -> Self {
         self.min_iterations = value;
         self
     }
 
+    /// Set the relative NSR update tolerance.
     pub fn tolerance(mut self, value: f32) -> Self {
         self.tolerance = value;
         self
     }
 
+    /// Set the boundary extension used while padding.
     pub fn boundary(mut self, value: Boundary) -> Self {
         self.boundary = value;
         self
     }
 
+    /// Set the FFT padding policy.
     pub fn padding(mut self, value: Padding) -> Self {
         self.padding = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable NSR, objective, and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
     }
 }
 
+/// Restore an image with Wiener filtering and default scalar NSR.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// NSR or correlation transfers, invalid padding, or non-finite restored values.
 pub fn wiener(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     wiener_with(image, psf, &Wiener::new())
 }
 
+/// Restore an image with Wiener filtering and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// NSR or correlation transfers, invalid padding, or non-finite restored values.
 pub fn wiener_with(image: &DynamicImage, psf: &Kernel2D, config: &Wiener) -> Result<DynamicImage> {
     validate(psf)?;
     validate_config(config)?;
@@ -293,6 +331,12 @@ pub(crate) fn wiener_array3_with(
     normalize_range_3d(&cropped, config.range_policy)
 }
 
+/// Estimate NSR iteratively and restore an image with Wiener filtering.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// NSR search settings, invalid padding, or non-finite restored values.
 pub fn unsupervised_wiener(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -300,6 +344,12 @@ pub fn unsupervised_wiener(
     unsupervised_wiener_with(image, psf, &UnsupervisedWiener::new())
 }
 
+/// Estimate NSR iteratively and restore an image with explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// NSR search settings, invalid padding, or non-finite restored values.
 pub fn unsupervised_wiener_with(
     image: &DynamicImage,
     psf: &Kernel2D,

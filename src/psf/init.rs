@@ -8,6 +8,11 @@ use ndarray::Array2;
 use crate::psf::basic::{gaussian2d, motion_linear};
 use crate::{Error, Kernel2D, Result};
 
+/// Create a normalized uniform PSF with `(height, width)` dimensions.
+///
+/// # Errors
+///
+/// Returns an error when either dimension is zero or normalization fails.
 pub fn uniform(dims: (usize, usize)) -> Result<Kernel2D> {
     let (height, width) = dims;
     if height == 0 || width == 0 {
@@ -19,10 +24,28 @@ pub fn uniform(dims: (usize, usize)) -> Result<Kernel2D> {
     Ok(kernel)
 }
 
+/// Create a normalized Gaussian starting PSF.
+///
+/// `dims` is `(height, width)` and `sigma` is measured in pixels.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `sigma` is not positive and
+/// finite, or generated values cannot be normalized.
 pub fn gaussian_guess(dims: (usize, usize), sigma: f32) -> Result<Kernel2D> {
     gaussian2d(dims, sigma)
 }
 
+/// Create a normalized motion-blur starting PSF fitted to `dims`.
+///
+/// `length` is measured in pixels and `angle_deg` is measured in degrees. The
+/// analytic motion kernel is centered, cropped, or zero-padded to `(height,
+/// width)`.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, motion parameters are invalid,
+/// the generated kernel is non-finite, or normalization fails.
 pub fn motion_guess(dims: (usize, usize), length: f32, angle_deg: f32) -> Result<Kernel2D> {
     let base = motion_linear(length, angle_deg)?;
     let resized = fit_to_dims(base.as_array(), dims)?;
@@ -31,6 +54,14 @@ pub fn motion_guess(dims: (usize, usize), length: f32, angle_deg: f32) -> Result
     Ok(kernel)
 }
 
+/// Create a normalized uniform PSF over a boolean support mask.
+///
+/// `true` entries receive equal mass and `false` entries receive zero.
+///
+/// # Errors
+///
+/// Returns an error when `support` is empty, has no `true` entries, or the
+/// generated kernel cannot be normalized.
 pub fn from_support(support: &Array2<bool>) -> Result<Kernel2D> {
     if support.is_empty() {
         return Err(Error::InvalidParameter);

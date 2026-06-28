@@ -13,6 +13,14 @@ pub struct Kernel2D {
 }
 
 impl Kernel2D {
+    /// Build a 2D kernel from `(height, width)` samples.
+    ///
+    /// The data is copied into standard layout.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] for empty arrays and
+    /// [`Error::NonFiniteInput`] for `NaN` or infinite samples.
     pub fn new(data: Array2<f32>) -> Result<Self> {
         validate_real_2d(&data)?;
         Ok(Self {
@@ -20,30 +28,47 @@ impl Kernel2D {
         })
     }
 
+    /// Borrow the underlying `(height, width)` array.
     pub fn as_array(&self) -> &Array2<f32> {
         &self.data
     }
 
+    /// Consume the kernel and return its owned array.
     pub fn into_inner(self) -> Array2<f32> {
         self.data
     }
 
+    /// Return `(height, width)`.
     pub fn dims(&self) -> (usize, usize) {
         self.data.dim()
     }
 
+    /// Sum all kernel samples.
     pub fn sum(&self) -> f32 {
         self.data.sum()
     }
 
+    /// Return whether every sample is finite.
     pub fn is_finite(&self) -> bool {
         self.data.iter().all(|value| value.is_finite())
     }
 
+    /// Normalize the kernel in place so its sum is `1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] when the kernel sum is non-finite or too
+    /// close to zero.
     pub fn normalize(&mut self) -> Result<()> {
         normalize_real_2d(&mut self.data, Error::InvalidPsf)
     }
 
+    /// Return a normalized copy of this kernel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] when the kernel sum is non-finite or too
+    /// close to zero.
     pub fn normalized(&self) -> Result<Self> {
         let mut kernel = self.clone();
         kernel.normalize()?;
@@ -61,6 +86,14 @@ pub struct Kernel3D {
 }
 
 impl Kernel3D {
+    /// Build a 3D kernel from `(depth, height, width)` samples.
+    ///
+    /// The data is copied into standard layout.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] for empty arrays and
+    /// [`Error::NonFiniteInput`] for `NaN` or infinite samples.
     pub fn new(data: Array3<f32>) -> Result<Self> {
         validate_real_3d(&data)?;
         Ok(Self {
@@ -68,30 +101,47 @@ impl Kernel3D {
         })
     }
 
+    /// Borrow the underlying `(depth, height, width)` array.
     pub fn as_array(&self) -> &Array3<f32> {
         &self.data
     }
 
+    /// Consume the kernel and return its owned array.
     pub fn into_inner(self) -> Array3<f32> {
         self.data
     }
 
+    /// Return `(depth, height, width)`.
     pub fn dims(&self) -> (usize, usize, usize) {
         self.data.dim()
     }
 
+    /// Sum all kernel samples.
     pub fn sum(&self) -> f32 {
         self.data.sum()
     }
 
+    /// Return whether every sample is finite.
     pub fn is_finite(&self) -> bool {
         self.data.iter().all(|value| value.is_finite())
     }
 
+    /// Normalize the kernel in place so its sum is `1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] when the kernel sum is non-finite or too
+    /// close to zero.
     pub fn normalize(&mut self) -> Result<()> {
         normalize_real_3d(&mut self.data, Error::InvalidPsf)
     }
 
+    /// Return a normalized copy of this kernel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPsf`] when the kernel sum is non-finite or too
+    /// close to zero.
     pub fn normalized(&self) -> Result<Self> {
         let mut kernel = self.clone();
         kernel.normalize()?;
@@ -109,6 +159,7 @@ pub enum Blur2D<'a> {
 }
 
 impl Blur2D<'_> {
+    /// Return the shape of the borrowed PSF or OTF.
     pub fn dims(&self) -> (usize, usize) {
         match self {
             Self::Psf(psf) => psf.dims(),
@@ -127,6 +178,7 @@ pub enum Blur3D<'a> {
 }
 
 impl Blur3D<'_> {
+    /// Return the shape of the borrowed PSF or OTF.
     pub fn dims(&self) -> (usize, usize, usize) {
         match self {
             Self::Psf(psf) => psf.dims(),

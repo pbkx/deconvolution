@@ -179,50 +179,66 @@ impl Default for Ista {
 }
 
 impl Ista {
+    /// Create an ISTA config with pixel sparsity defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum proximal-gradient iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed gradient step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the nonnegative sparsity weight.
+    ///
+    /// The soft-threshold value is `step_size * lambda`.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Set the sparse representation used by the proximal penalty.
     pub fn basis(mut self, value: SparseBasis) -> Self {
         self.basis = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -260,50 +276,66 @@ impl Default for Fista {
 }
 
 impl Fista {
+    /// Create a FISTA config with pixel sparsity defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum accelerated proximal-gradient iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the fixed gradient step size.
+    ///
+    /// `None` estimates a stable value from the convolution operator.
     pub fn step_size(mut self, value: Option<f32>) -> Self {
         self.step_size = value;
         self
     }
 
+    /// Set the nonnegative sparsity weight.
+    ///
+    /// The soft-threshold value is `step_size * lambda`.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Set the sparse representation used by the proximal penalty.
     pub fn basis(mut self, value: SparseBasis) -> Self {
         self.basis = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -329,10 +361,22 @@ struct ProximalConfig {
     collect_history: bool,
 }
 
+/// Restore an image with iterative shrinkage-thresholding.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// sparsity or solver parameters, or non-convergent step-size estimation.
 pub fn ista(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     ista_with(image, psf, &Ista::new())
 }
 
+/// Restore an image with ISTA and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// sparsity or solver parameters, or non-convergent step-size estimation.
 pub fn ista_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -379,10 +423,22 @@ pub(crate) fn ista_array2_with(
     )
 }
 
+/// Restore an image with accelerated iterative shrinkage-thresholding.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// sparsity or solver parameters, or non-convergent step-size estimation.
 pub fn fista(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     fista_with(image, psf, &Fista::new())
 }
 
+/// Restore an image with FISTA and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// sparsity or solver parameters, or non-convergent step-size estimation.
 pub fn fista_with(
     image: &DynamicImage,
     psf: &Kernel2D,

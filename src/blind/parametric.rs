@@ -46,6 +46,15 @@ pub enum ParametricPsf {
 }
 
 impl ParametricPsf {
+    /// Build a normalized 2D kernel from this parametric model.
+    ///
+    /// `dims` is `(height, width)` in pixels. Motion and defocus models are
+    /// centered, cropped, or padded to those dimensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for empty dimensions, non-finite or out-of-range model
+    /// parameters, or kernels that cannot be normalized.
     pub fn realize(&self, dims: (usize, usize)) -> Result<Kernel2D> {
         validate_dims(dims)?;
         match *self {
@@ -96,45 +105,58 @@ impl Default for BlindParametric {
 }
 
 impl BlindParametric {
+    /// Create a blind parametric config with nonnegative normalized PSF constraints.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum parametric PSF search iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the maximum image-estimation iterations per candidate PSF.
     pub fn image_iterations(mut self, value: usize) -> Self {
         self.image_iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Set the initial local-search step scale for PSF parameters.
     pub fn initial_step_scale(mut self, value: f32) -> Self {
         self.initial_step_scale = value;
         self
     }
 
+    /// Set the minimum local-search step scale.
     pub fn min_step_scale(mut self, value: f32) -> Self {
         self.min_step_scale = value;
         self
     }
 
+    /// Replace the PSF constraints applied to each realized model.
     pub fn psf_constraints(mut self, value: Vec<PsfConstraint>) -> Self {
         self.psf_constraints = value;
         self
     }
 
+    /// Add a 2D support mask before normalization.
+    ///
+    /// The mask shape must match `psf_dims`.
     pub fn support_mask(mut self, mask: Array2<bool>) -> Self {
         if let Some(index) = self
             .psf_constraints
@@ -149,12 +171,21 @@ impl BlindParametric {
         self
     }
 
+    /// Enable or disable objective and update histories in [`BlindReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
     }
 }
 
+/// Estimate an image and parametric PSF from a grayscale view of `image`.
+///
+/// `psf_dims` is `(height, width)` in pixels for the realized PSF.
+///
+/// # Errors
+///
+/// Returns an error for invalid image data, empty PSF dimensions, invalid model
+/// parameters, invalid constraints or support masks, or non-finite updates.
 pub fn parametric(
     image: &DynamicImage,
     initial_model: ParametricPsf,
@@ -163,6 +194,14 @@ pub fn parametric(
     parametric_with(image, initial_model, psf_dims, &BlindParametric::new())
 }
 
+/// Estimate an image and parametric PSF with explicit search settings.
+///
+/// `psf_dims` is `(height, width)` in pixels for the realized PSF.
+///
+/// # Errors
+///
+/// Returns an error for invalid image data, empty PSF dimensions, invalid model
+/// parameters, invalid constraints or support masks, or non-finite updates.
 pub fn parametric_with(
     image: &DynamicImage,
     initial_model: ParametricPsf,

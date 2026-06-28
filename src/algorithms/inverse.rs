@@ -36,25 +36,30 @@ impl Default for InverseFilter {
 }
 
 impl InverseFilter {
+    /// Create an inverse-filter config with default floors and no padding.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the minimum transfer magnitude used by stabilized inversion.
     pub fn stabilization_floor(mut self, value: f32) -> Self {
         self.stabilization_floor = value;
         self
     }
 
+    /// Set the transfer magnitude cutoff for truncated inversion.
     pub fn truncation_cutoff(mut self, value: f32) -> Self {
         self.truncation_cutoff = value;
         self
     }
 
+    /// Set the FFT padding policy.
     pub fn padding(mut self, value: Padding) -> Self {
         self.padding = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
@@ -86,30 +91,36 @@ impl<'a> Default for RegularizedInverseFilter<'a> {
 }
 
 impl<'a> RegularizedInverseFilter<'a> {
+    /// Create a regularized inverse-filter config with Laplacian defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the nonnegative regularization weight.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Set the minimum denominator used by the spectral inverse.
     pub fn stabilization_floor(mut self, value: f32) -> Self {
         self.stabilization_floor = value;
         self
     }
 
+    /// Set the FFT padding policy.
     pub fn padding(mut self, value: Padding) -> Self {
         self.padding = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Set the borrowed regularization operator.
     pub fn regularizer(mut self, value: RegOperator2D<'a>) -> Self {
         self.regularizer = Some(value);
         self
@@ -137,35 +148,52 @@ impl Default for TikhonovInverseFilter {
 }
 
 impl TikhonovInverseFilter {
+    /// Create a Tikhonov inverse-filter config with default damping.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the nonnegative Tikhonov weight.
     pub fn lambda(mut self, value: f32) -> Self {
         self.lambda = value;
         self
     }
 
+    /// Set the minimum denominator used by the spectral inverse.
     pub fn stabilization_floor(mut self, value: f32) -> Self {
         self.stabilization_floor = value;
         self
     }
 
+    /// Set the FFT padding policy.
     pub fn padding(mut self, value: Padding) -> Self {
         self.padding = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 }
 
+/// Restore an image by direct division in the frequency domain.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding, zero transfer samples, or non-finite restored values.
 pub fn naive_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     naive_inverse_filter_with(image, psf, &InverseFilter::new())
 }
 
+/// Restore an image by direct division with explicit inverse-filter settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding, zero transfer samples, or non-finite restored values.
 pub fn naive_inverse_filter_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -174,10 +202,22 @@ pub fn naive_inverse_filter_with(
     restore(image, psf, config, Mode::Naive)
 }
 
+/// Restore an image with stabilized inverse filtering.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding or floors, or non-finite restored values.
 pub fn inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     inverse_filter_with(image, psf, &InverseFilter::new())
 }
 
+/// Restore an image with stabilized inverse filtering and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding or floors, or non-finite restored values.
 pub fn inverse_filter_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -186,10 +226,22 @@ pub fn inverse_filter_with(
     restore(image, psf, config, Mode::Stabilized)
 }
 
+/// Restore an image with truncated inverse filtering.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding or cutoffs, or non-finite restored values.
 pub fn truncated_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     truncated_inverse_filter_with(image, psf, &InverseFilter::new())
 }
 
+/// Restore an image with truncated inverse filtering and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// padding or cutoffs, or non-finite restored values.
 pub fn truncated_inverse_filter_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -198,10 +250,22 @@ pub fn truncated_inverse_filter_with(
     restore(image, psf, config, Mode::Truncated)
 }
 
+/// Restore an image with inverse filtering and a regularization operator.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization settings, invalid padding, or non-finite restored values.
 pub fn regularized_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     regularized_inverse_filter_with(image, psf, &RegularizedInverseFilter::new())
 }
 
+/// Restore an image with explicit regularized inverse-filter settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// regularization settings, invalid padding, or non-finite restored values.
 pub fn regularized_inverse_filter_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -210,10 +274,22 @@ pub fn regularized_inverse_filter_with(
     restore_regularized(image, psf, config)
 }
 
+/// Restore an image with closed-form Tikhonov inverse filtering.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// Tikhonov settings, invalid padding, or non-finite restored values.
 pub fn tikhonov_inverse_filter(image: &DynamicImage, psf: &Kernel2D) -> Result<DynamicImage> {
     tikhonov_inverse_filter_with(image, psf, &TikhonovInverseFilter::new())
 }
 
+/// Restore an image with explicit Tikhonov inverse-filter settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// Tikhonov settings, invalid padding, or non-finite restored values.
 pub fn tikhonov_inverse_filter_with(
     image: &DynamicImage,
     psf: &Kernel2D,

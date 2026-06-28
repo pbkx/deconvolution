@@ -33,45 +33,56 @@ impl Default for Cmle {
 }
 
 impl Cmle {
+    /// Create a CMLE config with default SNR and acuity settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum EM iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Set the positive signal-to-noise ratio used to derive readout noise.
     pub fn snr(mut self, value: f32) -> Self {
         self.snr = value;
         self
     }
 
+    /// Set the positive acuity factor used to derive damping.
     pub fn acuity(mut self, value: f32) -> Self {
         self.acuity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -111,55 +122,68 @@ impl Default for Gmle {
 }
 
 impl Gmle {
+    /// Create a GMLE config with default noise and TV settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum EM iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Set the positive signal-to-noise ratio used to derive readout noise.
     pub fn snr(mut self, value: f32) -> Self {
         self.snr = value;
         self
     }
 
+    /// Set the positive acuity factor used to derive damping.
     pub fn acuity(mut self, value: f32) -> Self {
         self.acuity = value;
         self
     }
 
+    /// Set the nonnegative roughness factor used to derive TV weight.
     pub fn roughness(mut self, value: f32) -> Self {
         self.roughness = value;
         self
     }
 
+    /// Set the positive epsilon used in TV gradient magnitude.
     pub fn tv_epsilon(mut self, value: f32) -> Self {
         self.tv_epsilon = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -195,55 +219,78 @@ impl Default for Qmle {
 }
 
 impl Qmle {
+    /// Create a QMLE config with default SNR and acuity settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum EM iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Set the positive signal-to-noise ratio used to derive readout noise.
     pub fn snr(mut self, value: f32) -> Self {
         self.snr = value;
         self
     }
 
+    /// Set the positive acuity factor used to derive damping.
     pub fn acuity(mut self, value: f32) -> Self {
         self.acuity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
     }
 }
 
+/// Restore an image with classical maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn cmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     cmle_with(image, psf, &Cmle::new())
 }
 
+/// Restore an image with CMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn cmle_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -264,10 +311,22 @@ pub(crate) fn cmle_array3_with(
     run_poisson_em_array3(volume, psf, &poisson, PoissonRegularization::None)
 }
 
+/// Restore an image with Gaussian maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, roughness, TV, or EM settings, or non-finite iterative updates.
 pub fn gmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     gmle_with(image, psf, &Gmle::new())
 }
 
+/// Restore an image with GMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, roughness, TV, or EM settings, or non-finite iterative updates.
 pub fn gmle_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -288,10 +347,22 @@ pub(crate) fn gmle_array3_with(
     run_poisson_em_array3(volume, psf, &poisson, regularization)
 }
 
+/// Restore an image with quadratic maximum-likelihood estimation.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn qmle(image: &DynamicImage, psf: &Kernel2D) -> Result<(DynamicImage, SolveReport)> {
     qmle_with(image, psf, &Qmle::new())
 }
 
+/// Restore an image with QMLE and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// SNR, acuity, or EM settings, or non-finite iterative updates.
 pub fn qmle_with(
     image: &DynamicImage,
     psf: &Kernel2D,

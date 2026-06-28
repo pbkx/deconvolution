@@ -8,6 +8,15 @@ use ndarray::{Array2, Array3};
 
 use crate::{Error, Result};
 
+/// Create a 2D checkerboard array.
+///
+/// `dims` is `(height, width)`. `tile_size` is measured in pixels, and output
+/// samples alternate between `low` and `high`.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `tile_size` is zero, or `low` or
+/// `high` is non-finite.
 pub fn checkerboard_2d(
     dims: (usize, usize),
     tile_size: usize,
@@ -33,6 +42,15 @@ pub fn checkerboard_2d(
     Ok(output)
 }
 
+/// Create a centered Gaussian blob normalized to a maximum of `1.0`.
+///
+/// `dims` is `(height, width)` and `sigma` is measured in pixels.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, `sigma` is not positive and
+/// finite, generated values are non-finite, or normalization would divide by
+/// zero.
 pub fn gaussian_blob_2d(dims: (usize, usize), sigma: f32) -> Result<Array2<f32>> {
     let (height, width) = dims;
     if height == 0 || width == 0 {
@@ -71,6 +89,15 @@ pub fn gaussian_blob_2d(dims: (usize, usize), sigma: f32) -> Result<Array2<f32>>
     Ok(output)
 }
 
+/// Create an RGB edge test image with deterministic channel discontinuities.
+///
+/// `dims` is `(height, width)`, while the returned `RgbImage` stores pixels in
+/// `(x, y)` image coordinates.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty or cannot be represented as
+/// `u32` image dimensions.
 pub fn rgb_edges_2d(dims: (usize, usize)) -> Result<RgbImage> {
     let (height, width) = dims;
     if height == 0 || width == 0 {
@@ -100,6 +127,15 @@ pub fn rgb_edges_2d(dims: (usize, usize)) -> Result<RgbImage> {
     Ok(image)
 }
 
+/// Create a normalized 3D phantom volume.
+///
+/// `dims` is `(depth, height, width)`. The phantom combines ellipsoids, a lobe,
+/// and a ridge, then scales the maximum value to `1.0`.
+///
+/// # Errors
+///
+/// Returns an error when dimensions are empty, generated values are non-finite,
+/// or normalization would divide by zero.
 pub fn phantom_3d(dims: (usize, usize, usize)) -> Result<Array3<f32>> {
     let (depth, height, width) = dims;
     if depth == 0 || height == 0 || width == 0 {

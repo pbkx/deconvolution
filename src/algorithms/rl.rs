@@ -53,60 +53,78 @@ impl Default for RichardsonLucy {
 }
 
 impl RichardsonLucy {
+    /// Create a Richardson-Lucy config with default Poisson EM settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum EM iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.iterations = value;
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.relative_update_tolerance = value;
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.filter_epsilon = value;
         self
     }
 
+    /// Set the damping amount for correction factors.
+    ///
+    /// `None` disables damping.
     pub fn damping(mut self, value: Option<f32>) -> Self {
         self.damping = value;
         self
     }
 
+    /// Set per-pixel update weights in `(height, width)` order.
+    ///
+    /// Values must be finite and in `[0, 1]`.
     pub fn weights(mut self, value: Array2<f32>) -> Self {
         self.weights = Some(value);
         self
     }
 
+    /// Remove per-pixel update weights.
     pub fn clear_weights(mut self) -> Self {
         self.weights = None;
         self
     }
 
+    /// Set the nonnegative readout-noise offset added to predictions.
     pub fn readout_noise(mut self, value: f32) -> Self {
         self.readout_noise = value;
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.positivity = value;
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.channel_mode = value;
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.range_policy = value;
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.collect_history = value;
         self
@@ -135,70 +153,90 @@ impl Default for RichardsonLucyTv {
 }
 
 impl RichardsonLucyTv {
+    /// Create an RL-TV config with default Poisson EM and TV settings.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the maximum EM iteration count.
     pub fn iterations(mut self, value: usize) -> Self {
         self.base = self.base.iterations(value);
         self
     }
 
+    /// Set the relative update stopping tolerance.
+    ///
+    /// `None` disables this stopping criterion.
     pub fn relative_update_tolerance(mut self, value: Option<f32>) -> Self {
         self.base = self.base.relative_update_tolerance(value);
         self
     }
 
+    /// Set the positive denominator floor used in multiplicative updates.
     pub fn filter_epsilon(mut self, value: f32) -> Self {
         self.base = self.base.filter_epsilon(value);
         self
     }
 
+    /// Set the damping amount for correction factors.
+    ///
+    /// `None` disables damping.
     pub fn damping(mut self, value: Option<f32>) -> Self {
         self.base = self.base.damping(value);
         self
     }
 
+    /// Set per-pixel update weights in `(height, width)` order.
+    ///
+    /// Values must be finite and in `[0, 1]`.
     pub fn weights(mut self, value: Array2<f32>) -> Self {
         self.base = self.base.weights(value);
         self
     }
 
+    /// Remove per-pixel update weights.
     pub fn clear_weights(mut self) -> Self {
         self.base = self.base.clear_weights();
         self
     }
 
+    /// Set the nonnegative readout-noise offset added to predictions.
     pub fn readout_noise(mut self, value: f32) -> Self {
         self.base = self.base.readout_noise(value);
         self
     }
 
+    /// Enable or disable nonnegative projection after each update.
     pub fn positivity(mut self, value: bool) -> Self {
         self.base = self.base.positivity(value);
         self
     }
 
+    /// Set how `image::DynamicImage` channels are restored.
     pub fn channel_mode(mut self, value: ChannelMode) -> Self {
         self.base = self.base.channel_mode(value);
         self
     }
 
+    /// Set output range handling after restoration.
     pub fn range_policy(mut self, value: RangePolicy) -> Self {
         self.base = self.base.range_policy(value);
         self
     }
 
+    /// Enable or disable objective and residual history in [`SolveReport`].
     pub fn collect_history(mut self, value: bool) -> Self {
         self.base = self.base.collect_history(value);
         self
     }
 
+    /// Set the nonnegative total-variation regularization weight.
     pub fn tv_weight(mut self, value: f32) -> Self {
         self.tv_weight = value;
         self
     }
 
+    /// Set the positive epsilon used in TV gradient magnitude.
     pub fn tv_epsilon(mut self, value: f32) -> Self {
         self.tv_epsilon = value;
         self
@@ -242,6 +280,12 @@ impl PoissonEm {
     }
 }
 
+/// Restore an image with Richardson-Lucy Poisson EM.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM settings, invalid weights, or non-finite iterative updates.
 pub fn richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -249,6 +293,12 @@ pub fn richardson_lucy(
     richardson_lucy_with(image, psf, &RichardsonLucy::new())
 }
 
+/// Restore an image with Richardson-Lucy Poisson EM and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM settings, invalid weights, or non-finite iterative updates.
 pub fn richardson_lucy_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -273,6 +323,12 @@ pub(crate) fn richardson_lucy_array3_with(
     run_richardson_lucy_array3(volume, psf, config, false, PoissonRegularization::None)
 }
 
+/// Restore an image with damped Richardson-Lucy updates.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM settings, invalid weights, or non-finite iterative updates.
 pub fn damped_richardson_lucy(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -280,6 +336,12 @@ pub fn damped_richardson_lucy(
     damped_richardson_lucy_with(image, psf, &RichardsonLucy::new())
 }
 
+/// Restore an image with damped Richardson-Lucy and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM settings, invalid weights, or non-finite iterative updates.
 pub fn damped_richardson_lucy_with(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -288,6 +350,12 @@ pub fn damped_richardson_lucy_with(
     run_richardson_lucy(image, psf, config, true, PoissonRegularization::None)
 }
 
+/// Restore an image with Richardson-Lucy and total variation regularization.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM or TV settings, invalid weights, or non-finite iterative updates.
 pub fn richardson_lucy_tv(
     image: &DynamicImage,
     psf: &Kernel2D,
@@ -295,6 +363,12 @@ pub fn richardson_lucy_tv(
     richardson_lucy_tv_with(image, psf, &RichardsonLucyTv::new())
 }
 
+/// Restore an image with RL-TV and explicit settings.
+///
+/// # Errors
+///
+/// Returns an error for invalid PSFs, empty or non-finite image data, invalid
+/// EM or TV settings, invalid weights, or non-finite iterative updates.
 pub fn richardson_lucy_tv_with(
     image: &DynamicImage,
     psf: &Kernel2D,

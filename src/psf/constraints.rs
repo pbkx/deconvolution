@@ -19,6 +19,14 @@ pub enum PsfConstraint {
 }
 
 impl PsfConstraint {
+    /// Apply this constraint to a 2D kernel and return the projected kernel.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DimensionMismatch`] when a support mask shape differs
+    /// from the kernel, [`Error::InvalidParameter`] for an empty or all-false
+    /// support mask, and [`Error::InvalidPsf`] when normalization cannot be
+    /// performed.
     pub fn apply(&self, kernel: &Kernel2D) -> Result<Kernel2D> {
         match self {
             Self::Nonnegative => project_nonnegative(kernel),
@@ -28,10 +36,20 @@ impl PsfConstraint {
     }
 }
 
+/// Apply one PSF constraint to a 2D kernel.
+///
+/// # Errors
+///
+/// Returns the same errors as [`PsfConstraint::apply`].
 pub fn apply_constraint(kernel: &Kernel2D, constraint: &PsfConstraint) -> Result<Kernel2D> {
     constraint.apply(kernel)
 }
 
+/// Apply PSF constraints in slice order.
+///
+/// # Errors
+///
+/// Returns the first error produced by [`PsfConstraint::apply`].
 pub fn apply_constraints(kernel: &Kernel2D, constraints: &[PsfConstraint]) -> Result<Kernel2D> {
     let mut projected = kernel.clone();
     for constraint in constraints {
