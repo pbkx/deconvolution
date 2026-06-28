@@ -7,11 +7,22 @@ keywords = ["image", "deconvolution", "deblurring", "restoration", "fft"]
 categories = ["algorithms", "computer-vision", "multimedia::images", "science"]
 license = "MIT"
 description = "Rust image deconvolution and restoration library."
-exclude = [".github/**/*", ".tmp/**/*", "context.md", "SAMPLE.md", "waterfall.png"]
+exclude = [
+    ".github/**/*",
+    ".tmp/**/*",
+    "CONTEXT.txt",
+    "context.txt",
+    "context.md",
+    "SAMPLE.md",
+    "waterfall.png",
+]
 readme = "README.md"
 documentation = "https://docs.rs/deconvolution"
 repository = "https://github.com/pbkx/deconvolution"
 autobenches = false
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 default = ["rayon"]

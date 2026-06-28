@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::bare_urls)]
 #![warn(clippy::missing_errors_doc)]
