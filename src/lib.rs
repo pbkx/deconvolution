@@ -1,4 +1,10 @@
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
+#![warn(rustdoc::broken_intra_doc_links)]
+#![warn(rustdoc::bare_urls)]
+#![warn(clippy::missing_errors_doc)]
+#![warn(clippy::missing_panics_doc)]
+#![warn(clippy::missing_safety_doc)]
 
 //! Rust image deconvolution and restoration library.
 //!
