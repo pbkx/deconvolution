@@ -1,21 +1,13 @@
 [package]
 name = "deconvolution"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.96"
 keywords = ["image", "deconvolution", "deblurring", "restoration", "fft"]
 categories = ["algorithms", "computer-vision", "multimedia::images", "science"]
 license = "MIT"
 description = "Rust image deconvolution and restoration library."
-exclude = [
-    ".github/**/*",
-    ".tmp/**/*",
-    "CONTEXT.txt",
-    "context.txt",
-    "context.md",
-    "SAMPLE.md",
-    "waterfall.png",
-]
+exclude = [".github/**/*", ".tmp/**/*"]
 readme = "README.md"
 documentation = "https://docs.rs/deconvolution"
 repository = "https://github.com/pbkx/deconvolution"
