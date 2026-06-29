@@ -41,7 +41,7 @@ cargo add deconvolution
 
 ```toml
 [dependencies]
-deconvolution = "0.2.0"
+deconvolution = "0.2.1"
 ```
 
 Image loading: Add `image` when your application opens or saves image files.
@@ -54,7 +54,7 @@ Serial build: Disable default features to turn off `rayon`.
 
 ```toml
 [dependencies]
-deconvolution = { version = "0.2.0", default-features = false }
+deconvolution = { version = "0.2.1", default-features = false }
 ```
 
 ### Quick Start
@@ -419,10 +419,12 @@ Checks:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --all-features --all-targets -- -D warnings
 cargo check --all-features
-cargo test --workspace --all-targets --all-features
-cargo doc --workspace --no-deps --all-features
+cargo test --all-features
+cargo test --doc --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
+cargo package --allow-dirty
 ```
 
 ### Limitations and Scope
